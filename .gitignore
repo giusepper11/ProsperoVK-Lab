@@ -1,0 +1,16 @@
+# Local build and generated artifacts
+/build*/
+/out/
+/artifacts/
+/results/
+/.cache/
+CMakeUserPresets.json
+compile_commands.json
+*.elf
+*.self
+*.pkg
+*.o
+*.log
+.env
+.env.*
+!.env.example
