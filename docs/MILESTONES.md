@@ -1,6 +1,6 @@
 # Milestones
 
-All milestones are planned. No dates or hardware results are assumed. Each milestone must have an OpenSpec change (or explicit documentation-only exception), tests, artifacts and a reviewable exit gate. Dependencies are listed below; independent tasks within a milestone may proceed in parallel.
+M0 is in progress. M1–M7 are planned. Each milestone must have an OpenSpec change (or explicit documentation-only exception), tests, artifacts and a reviewable exit gate. Dependencies are listed below. Independent tasks within a milestone may proceed in parallel.
 
 | ID | Outcome | Depends on |
 | --- | --- | --- |
@@ -14,11 +14,18 @@ All milestones are planned. No dates or hardware results are assumed. Each miles
 | M7 | Evidence-led driver improvements | M6 |
 
 ## M0: audit and feasibility
-- [ ] Record upstream revisions, licenses, build entry points, existing tests, and actual CTS port/report mechanism.
-- [ ] Map Vulkan features and limits to test candidates; distinguish mandatory, optional and unavailable.
-- [ ] Verify SDK/toolchain and packaging from public sources. Determine Linux and console run/log retrieval commands, with a minimal console smoke experiment where feasible.
-- [ ] Document firmware 13.60 compatibility evidence or blocker, device access, resource limits and unresolved interfaces.
-- [ ] Decide original-code license with maintainer; record integration choices and first OpenSpec implementation proposal.
+
+- [x] Record upstream revisions, licenses, build entry points, existing tests, and the documented CTS port/report mechanism. Exact port revision and rebuild remain open. [Upstream audit](UPSTREAM.md).
+- [x] Map Vulkan features and limits to test candidates, including required, optional and upstream-reported unavailable features. [Coverage matrix](VULKAN_COVERAGE.md).
+- [ ] Verify final title linkage and packaging, console launch, and log retrieval. The Linux fixture and exact upstream compute case passed on llvmpipe. The PS5-target C++ compilation, pinned SDK and RADV release builds and relocatable link check passed. The operator confirmed the console is a PS5 Slim and Prospero Manager reported firmware 13.60. The Vulkan smoke remains `NOT_RUN`. [Toolchain evidence](M0_TOOLCHAIN.md), [console preflight](HARDWARE_VALIDATION.md#m0-console-preflight).
+- [x] Document the firmware 13.60 compatibility blocker, device access, resource limits and unresolved interfaces. [Audit risks](UPSTREAM.md#risks-and-outstanding-evidence), [M0 issue](https://github.com/giusepper11/ProsperoVK-Lab/issues/1).
+- [x] Record the original-work license and integration choices. [GPL-3.0-or-later](../LICENSE), [upstream audit](UPSTREAM.md), [M1 implementation proposal](../openspec/changes/m1-portable-vulkan-smoke/proposal.md).
+- [ ] Review the combined title's integrated components and distribution terms against its final package manifest. The standalone pre-packaging ELF's component inventory is available. [Component review](UPSTREAM.md#standalone-compute-component-review).
+
+The [M0 OpenSpec change](../openspec/changes/m0-upstream-feasibility-audit/proposal.md) remains active. Hardware validation is blocked pending an authorized title package, its build manifest and a verified launch and artifact retrieval path for the Slim on firmware 13.60.
+
+The standalone RADV compute check passed on Linux llvmpipe. The PS5-target relocatable and pre-packaging ELF linked reproducibly on the build host. The final title and hardware execution remain pending. [Standalone change](../openspec/changes/m0-radv-compute-smoke/proposal.md), [standalone evidence](M0_TOOLCHAIN.md#standalone-radv-compute).
+
 Exit: reproducible audit, pinned dependency plan, host build feasibility and console smoke evidence or explicit blocked hardware gate. Do not close M0 until required console feasibility is demonstrated or maintainer changes scope.
 
 ## M1: discovery and portable runner
