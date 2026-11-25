@@ -18,6 +18,15 @@ SMOKE = ROOT / "tests/fixtures/m0-radv-compute"
 CTS = ROOT / "tests/fixtures/m0-cts"
 ID = "PPSA99743"
 NAME = "ProsperoVK Lab"
+M1_ID = "PPSA99745"
+M1_NAME = "ProsperoVK Lab M1"
+M1_CASE = "core.compute.storage-buffer"
+M1_ENTRY = ROOT / "src/platform/ps5/title.cpp"
+M1_SHADER = ROOT / "suites/compute/storage.comp"
+M1_SCHEMA = ROOT / "schemas/run-v1.schema.json"
+M1_SOURCES = tuple(ROOT / name for name in (
+    "src/core/runner.cpp", "src/vulkan/inventory.cpp", "suites/compute/compute.cpp",
+))
 CTS_NAME = "ProsperoVK Lab CTS"
 TEMPLATE = "91179df760df1e6c6f2d4d172bc435319d79ff3c"
 VULKAN = "7f492b4c6f67a4e8c8c67a4272cfeef22abea9cc"
@@ -35,19 +44,50 @@ def run(*args, **kwargs):
     subprocess.run(args, check=True, **kwargs)
 
 
+def prepare_m1(cross, sdk, radv):
+    sources = [M1_ENTRY, M1_SHADER, M1_SCHEMA, SMOKE / "CMakeLists.txt",
+               *M1_SOURCES, *sorted((ROOT / "src/core").glob("*.hpp")),
+               *sorted((ROOT / "src/vulkan").glob("*.hpp")),
+               *sorted((ROOT / "suites/compute").glob("*.hpp"))]
+    source_hashes = {path: digest(path) for path in sources}
+    cross.mkdir()
+    spv, header = cross / "compute.spv", cross / "compute_spv.hpp"
+    run("cmake", f"-DSMOKE_SHADER_SOURCE={M1_SHADER}", f"-DSMOKE_SHADER_BINARY={spv}",
+        f"-DSMOKE_SHADER_HEADER={header}",
+        f"-DSMOKE_GLSLANG={shutil.which('glslangValidator')}",
+        f"-DSMOKE_SPIRV_VAL={shutil.which('spirv-val')}", "-P", SMOKE / "CMakeLists.txt")
+    shader_digest = digest(spv)
+    compiler = sdk / "bin/prospero-clang++"
+    flags = ["-std=c++20", "-O2", "-DVK_NO_PROTOTYPES", f'-DM1_SHADER_SHA256="{shader_digest}"',
+             "-I", ROOT, "-I", ROOT / "src", "-I", radv / "include", "-I", cross]
+    objects = [cross / (source.stem + ".o") for source in M1_SOURCES]
+    for source, obj in zip(M1_SOURCES, objects):
+        run(compiler, *flags, "-c", source, "-o", obj)
+    toolchain = cross / "toolchain.txt"
+    with toolchain.open("w") as log:
+        for command in ([compiler, "--version"], ["glslangValidator", "--version"], ["spirv-val", "--version"]):
+            run(*command, stdout=log)
+    inputs = [*sources, spv, header, toolchain, *objects]
+    return inputs, objects, shader_digest, source_hashes
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ("output", "template", "vulkan", "mesa", "sdk", "radv", "cross", "sdk_source"):
         parser.add_argument(name, type=lambda s: Path(s).resolve())
-    parser.add_argument("--cts", type=lambda s: Path(s).resolve())
+    workload = parser.add_mutually_exclusive_group()
+    workload.add_argument("--cts", type=lambda s: Path(s).resolve())
+    workload.add_argument("--m1", action="store_true")
     parser.add_argument("--title-id")
     a = parser.parse_args()
     if a.cts:
-        if not a.title_id or not re.fullmatch(r"PPSA[0-9]{5}", a.title_id) or a.title_id == ID:
+        if not a.title_id or not re.fullmatch(r"PPSA[0-9]{5}", a.title_id) or a.title_id in (ID, M1_ID):
             parser.error("CTS requires a distinct PPSA title ID")
         title_id, title_name = a.title_id, CTS_NAME
     elif a.title_id:
         parser.error("--title-id requires --cts")
+    elif a.m1:
+        title_id, title_name = M1_ID, M1_NAME
     else:
         title_id, title_name = ID, NAME
     for tree, pin in [(a.template, TEMPLATE), (a.vulkan, VULKAN), (a.mesa, MESA)]:
@@ -57,7 +97,7 @@ def main():
     archive = a.radv / "lib/libvulkan_radeon.ps5.a"
     if digest(archive) != RADV or (a.sdk / ".ps5-sdk-revision").read_text().strip() != SDK:
         parser.error("RADV digest or title SDK pin mismatch")
-    if not a.cts:
+    if not a.cts and not a.m1:
         run("sha256sum", "--quiet", "-c", "SHA256SUMS", cwd=a.cross)
     upstream = a.template / "ps5"
     generator = runpy.run_path(str(upstream / "tools/new-title.py"))
@@ -104,6 +144,12 @@ def main():
         manifest.update(workload="cts", cts=provenance,
                         lab_worktree="dirty" if lab_status else "clean")
         inputs += cts_inputs
+    elif a.m1:
+        lab_status = subprocess.check_output(["git", "-C", ROOT, "status", "--porcelain"])
+        m1_inputs, link_args, shader_digest, source_hashes = prepare_m1(a.cross, a.sdk, a.radv)
+        manifest.update(workload="m1", case_id=M1_CASE, shader_sha256=shader_digest,
+                        lab_worktree="dirty" if lab_status else "clean")
+        inputs += m1_inputs
     else:
         inputs += [TITLE / "main.cpp", SMOKE / "compute.cpp", SMOKE / "compute.comp",
                    SMOKE / "compute.hpp", a.cross / "compute.o", a.cross / "compute.spv",
@@ -120,6 +166,15 @@ def main():
         "-o", work / "platform.o")
     if a.cts:
         title_object = cts["compile_entry"](a.sdk, upstream / "src", work, identity, title_id)
+    elif a.m1:
+        title_object = work / "title.o"
+        run(a.sdk / "bin/prospero-clang++", "-std=c++20", "-O2",
+            f'-DM1_BUILD_ID="{identity}"', f'-DM1_REVISION="{manifest["lab_revision"]}"',
+            f'-DM1_TITLE_ID="{title_id}"', "-I", upstream / "src", "-I", ROOT / "src",
+            "-I", a.radv / "include", "-c", M1_ENTRY, "-o", title_object)
+        if subprocess.check_output(lab_head, text=True).strip() != manifest["lab_revision"] or any(
+                digest(path) != value for path, value in source_hashes.items()):
+            raise ValueError("lab revision or M1 source changed during compilation")
     else:
         title_object = work / "title.o"
         run(a.sdk / "bin/prospero-clang++", "-std=c++20", "-O2", "-DM0_RADV_COMPUTE_PS5", "-DM0_RADV_COMPUTE_TIMING",

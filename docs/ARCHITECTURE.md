@@ -1,6 +1,6 @@
 # Architecture
 
-Status: proposed design, not an implemented system. M0 must validate platform assumptions before they become commitments.
+M0 established the Linux loader and PS5 static RADV title paths. M1 implements the registry, device inventory, report writer and first shared offscreen compute case. Slim acceptance for the portable runner is pending. Later suites and the interactive UI remain proposed.
 
 ## Boundaries
 

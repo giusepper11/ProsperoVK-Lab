@@ -1,0 +1,457 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ProsperoVK portable runner report v1",
+  "type": "object",
+  "required": [
+    "schema_version", "run_id",
+    "target",
+    "build_id",
+    "revision",
+    "device_index",
+    "case_id",
+    "status",
+    "reason",
+    "shader_sha256",
+    "inventory",
+    "requirements",
+    "enabled",
+    "correctness",
+    "timing",
+    "eligibility"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "run_id": {"type": "string", "minLength": 1},
+    "target": {"enum": ["linux", "ps5"]},
+    "build_id": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "revision": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
+    "device_index": {"$ref": "#/$defs/uint"},
+    "case_id": {"enum": [null, "core.compute.storage-buffer"]},
+    "status": {"enum": ["PASS", "FAIL", "UNSUPPORTED", "ERROR", "TIMEOUT", "NOT_RUN"]},
+    "reason": {"type": ["string", "null"], "minLength": 1},
+    "shader_sha256": {"anyOf": [{"type": "string", "pattern": "^[0-9a-f]{64}$"}, {"type": "null"}]},
+    "inventory": {"anyOf": [{"$ref": "#/$defs/inventory"}, {"type": "null"}]},
+    "requirements": {"oneOf": [{"const": {}}, {"$ref": "#/$defs/requirements"}]},
+    "enabled": {"anyOf": [{"$ref": "#/$defs/enabled"}, {"type": "null"}]},
+    "correctness": {"anyOf": [{"$ref": "#/$defs/correctness"}, {"type": "null"}]},
+    "timing": {"anyOf": [{"$ref": "#/$defs/timing"}, {"type": "null"}]},
+    "eligibility": {"enum": ["not_evaluated", "unmet", "met"]}
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {"if": {"properties": {"target": {"const": "ps5"}}}, "then": {"properties": {"run_id": {"pattern": "^run-[0-9]{6}$"}}}},
+    {"if": {"properties": {"target": {"const": "linux"}}}, "then": {"properties": {"run_id": {"pattern": "^[0-9a-f]{32}$"}}}},
+    {
+      "if": {"properties": {"status": {"const": "PASS"}}},
+      "then": {"properties": {"inventory": {"$ref": "#/$defs/inventory"}, "reason": {"type": "null"}}}
+    },
+    {
+      "if": {"properties": {"status": {"not": {"const": "PASS"}}}},
+      "then": {"properties": {"reason": {"type": "string", "minLength": 1}, "timing": {"type": "null"}}}
+    },
+    {
+      "if": {"properties": {"case_id": {"type": "null"}}},
+      "then": {
+        "properties": {
+          "status": {"enum": ["PASS", "ERROR"]},
+          "shader_sha256": {"type": "null"},
+          "enabled": {"type": "null"},
+          "correctness": {"type": "null"},
+          "timing": {"type": "null"}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"case_id": {"type": "string", "minLength": 1}}},
+      "then": {"properties": {"shader_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}}
+    },
+    {
+      "if": {"properties": {"case_id": {"type": "string", "minLength": 1}, "status": {"const": "PASS"}}},
+      "then": {
+        "properties": {"enabled": {"type": "object"}, "correctness": {"type": "object"}, "timing": {"type": "object"}}
+      }
+    },
+    {
+      "if": {
+        "properties": {"case_id": {"type": "string", "minLength": 1}, "status": {"not": {"const": "NOT_RUN"}}}
+      },
+      "then": {
+        "properties": {"requirements": {"$ref": "#/$defs/requirements"}, "inventory": {"$ref": "#/$defs/inventory"}}
+      }
+    },
+    {
+      "if": {"properties": {"case_id": {"type": "string", "minLength": 1}, "status": {"const": "PASS"}}},
+      "then": {
+        "properties": {
+          "eligibility": {"const": "met"},
+          "correctness": {"properties": {"mismatch_count": {"const": 0}, "first_mismatch": {"type": "null"}}},
+          "enabled": {"required": ["buffer_memory"]}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"status": {"const": "UNSUPPORTED"}}},
+      "then": {"properties": {"eligibility": {"const": "unmet"}}}
+    },
+    {
+      "if": {"properties": {"status": {"const": "FAIL"}}},
+      "then": {
+        "properties": {
+          "eligibility": {"const": "met"},
+          "correctness": {
+            "type": "object",
+            "properties": {"mismatch_count": {"minimum": 1}, "first_mismatch": {"type": "object"}}
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"status": {"enum": ["ERROR", "TIMEOUT", "NOT_RUN", "UNSUPPORTED"]}}},
+      "then": {"properties": {"correctness": {"type": "null"}}}
+    },
+    {
+      "if": {"properties": {"status": {"const": "NOT_RUN"}}},
+      "then": {
+        "properties": {
+          "eligibility": {"const": "not_evaluated"},
+          "requirements": {"const": {}},
+          "enabled": {"type": "null"}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"case_id": {"type": "null"}}},
+      "then": {"properties": {"eligibility": {"const": "not_evaluated"}, "requirements": {"const": {}}}}
+    }
+  ],
+  "$defs": {
+    "uint": {"type": "integer", "minimum": 0},
+    "extensions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "spec_version"],
+        "properties": {"name": {"type": "string", "minLength": 1}, "spec_version": {"$ref": "#/$defs/uint"}},
+        "additionalProperties": false
+      }
+    },
+    "query": {
+      "type": "object",
+      "required": ["entrypoint", "reason"],
+      "properties": {
+        "entrypoint": {"type": "string", "minLength": 1},
+        "reason": {"type": ["string", "null"], "minLength": 1}
+      },
+      "additionalProperties": false
+    },
+    "driver": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["available", "reason"],
+          "properties": {"available": {"const": false}, "reason": {"type": "string", "minLength": 1}},
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["available", "reason", "driver_id", "name", "info", "conformance_version"],
+          "properties": {
+            "available": {"const": true},
+            "reason": {"type": "null"},
+            "driver_id": {"$ref": "#/$defs/uint"},
+            "name": {"type": "string"},
+            "info": {"type": "string"},
+            "conformance_version": {"type": "array", "items": {"$ref": "#/$defs/uint"}, "minItems": 4, "maxItems": 4}
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "limits": {
+      "type": "object",
+      "required": [
+        "maxComputeWorkGroupCount",
+        "maxComputeWorkGroupSize",
+        "maxComputeWorkGroupInvocations",
+        "maxComputeSharedMemorySize",
+        "maxBoundDescriptorSets",
+        "maxPerStageDescriptorStorageBuffers",
+        "maxPerStageResources",
+        "maxDescriptorSetStorageBuffers",
+        "maxStorageBufferRange",
+        "maxMemoryAllocationCount",
+        "minMemoryMapAlignment",
+        "minStorageBufferOffsetAlignment",
+        "nonCoherentAtomSize",
+        "maxImageDimension2D",
+        "timestampPeriod",
+        "timestampComputeAndGraphics"
+      ],
+      "properties": {
+        "maxComputeWorkGroupCount": {"type": "array", "items": {"$ref": "#/$defs/uint"}, "minItems": 3, "maxItems": 3},
+        "maxComputeWorkGroupSize": {"type": "array", "items": {"$ref": "#/$defs/uint"}, "minItems": 3, "maxItems": 3},
+        "maxComputeWorkGroupInvocations": {"$ref": "#/$defs/uint"},
+        "maxComputeSharedMemorySize": {"$ref": "#/$defs/uint"},
+        "maxBoundDescriptorSets": {"$ref": "#/$defs/uint"},
+        "maxPerStageDescriptorStorageBuffers": {"$ref": "#/$defs/uint"},
+        "maxPerStageResources": {"$ref": "#/$defs/uint"},
+        "maxDescriptorSetStorageBuffers": {"$ref": "#/$defs/uint"},
+        "maxStorageBufferRange": {"$ref": "#/$defs/uint"},
+        "maxMemoryAllocationCount": {"$ref": "#/$defs/uint"},
+        "minMemoryMapAlignment": {"$ref": "#/$defs/uint"},
+        "minStorageBufferOffsetAlignment": {"$ref": "#/$defs/uint"},
+        "nonCoherentAtomSize": {"$ref": "#/$defs/uint"},
+        "maxImageDimension2D": {"$ref": "#/$defs/uint"},
+        "timestampPeriod": {"type": "number", "minimum": 0},
+        "timestampComputeAndGraphics": {"type": "boolean"}
+      },
+      "additionalProperties": false
+    },
+    "queue": {
+      "type": "object",
+      "required": ["index", "flags", "count", "timestamp_valid_bits", "min_image_transfer_granularity"],
+      "properties": {
+        "index": {"$ref": "#/$defs/uint"},
+        "flags": {"$ref": "#/$defs/uint"},
+        "count": {"$ref": "#/$defs/uint"},
+        "timestamp_valid_bits": {"$ref": "#/$defs/uint"},
+        "min_image_transfer_granularity": {"type": "array", "items": {"$ref": "#/$defs/uint"}, "minItems": 3, "maxItems": 3}
+      },
+      "additionalProperties": false
+    },
+    "memory": {
+      "type": "object",
+      "required": ["types", "heaps"],
+      "properties": {
+        "types": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["index", "property_flags", "heap_index"],
+            "properties": {
+              "index": {"$ref": "#/$defs/uint"},
+              "property_flags": {"$ref": "#/$defs/uint"},
+              "heap_index": {"$ref": "#/$defs/uint"}
+            },
+            "additionalProperties": false
+          }
+        },
+        "heaps": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["index", "size", "flags"],
+            "properties": {
+              "index": {"$ref": "#/$defs/uint"},
+              "size": {"$ref": "#/$defs/uint"},
+              "flags": {"$ref": "#/$defs/uint"}
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "format": {
+      "type": "object",
+      "required": ["format", "linear_tiling_features", "optimal_tiling_features", "buffer_features"],
+      "properties": {
+        "format": {"$ref": "#/$defs/uint"},
+        "linear_tiling_features": {"$ref": "#/$defs/uint"},
+        "optimal_tiling_features": {"$ref": "#/$defs/uint"},
+        "buffer_features": {"$ref": "#/$defs/uint"}
+      },
+      "additionalProperties": false
+    },
+    "device": {
+      "type": "object",
+      "required": [
+        "index",
+        "name",
+        "api_version",
+        "negotiated_api_version",
+        "driver_version",
+        "vendor_id",
+        "device_id",
+        "device_type",
+        "pipeline_cache_uuid",
+        "device_uuid",
+        "driver_uuid",
+        "uuid_reason",
+        "properties_query",
+        "features_query",
+        "driver_properties",
+        "extensions",
+        "features",
+        "limits",
+        "queues",
+        "memory",
+        "formats"
+      ],
+      "properties": {
+        "index": {"$ref": "#/$defs/uint"},
+        "name": {"type": "string", "minLength": 1},
+        "api_version": {"$ref": "#/$defs/uint"},
+        "negotiated_api_version": {"$ref": "#/$defs/uint"},
+        "driver_version": {"$ref": "#/$defs/uint"},
+        "vendor_id": {"$ref": "#/$defs/uint"},
+        "device_id": {"$ref": "#/$defs/uint"},
+        "device_type": {"$ref": "#/$defs/uint"},
+        "pipeline_cache_uuid": {"type": "string", "pattern": "^[0-9a-f]{32}$"},
+        "device_uuid": {"anyOf": [{"type": "string", "pattern": "^[0-9a-f]{32}$"}, {"type": "null"}]},
+        "driver_uuid": {"anyOf": [{"type": "string", "pattern": "^[0-9a-f]{32}$"}, {"type": "null"}]},
+        "uuid_reason": {"type": ["string", "null"], "minLength": 1},
+        "properties_query": {"$ref": "#/$defs/query"},
+        "features_query": {"$ref": "#/$defs/query"},
+        "driver_properties": {"$ref": "#/$defs/driver"},
+        "extensions": {"$ref": "#/$defs/extensions"},
+        "features": {
+          "type": "object",
+          "required": ["robustBufferAccess"],
+          "additionalProperties": {"type": "boolean"}
+        },
+        "limits": {"$ref": "#/$defs/limits"},
+        "queues": {"type": "array", "items": {"$ref": "#/$defs/queue"}},
+        "memory": {"$ref": "#/$defs/memory"},
+        "formats": {"type": "array", "items": {"$ref": "#/$defs/format"}}
+      },
+      "additionalProperties": false
+    },
+    "inventory": {
+      "type": "object",
+      "required": ["instance", "device_count", "selected_device", "queue_family"],
+      "properties": {
+        "instance": {
+          "type": "object",
+          "required": [
+            "loader_api_version",
+            "loader_api_version_reason",
+            "api_version",
+            "extensions",
+            "enabled_extensions"
+          ],
+          "properties": {
+            "loader_api_version": {"$ref": "#/$defs/uint"},
+            "loader_api_version_reason": {"type": ["string", "null"], "minLength": 1},
+            "api_version": {"$ref": "#/$defs/uint"},
+            "extensions": {"$ref": "#/$defs/extensions"},
+            "enabled_extensions": {"type": "array", "items": {"type": "string", "minLength": 1}}
+          },
+          "additionalProperties": false
+        },
+        "device_count": {"type": "integer", "minimum": 1},
+        "selected_device": {"$ref": "#/$defs/device"},
+        "queue_family": {"anyOf": [{"$ref": "#/$defs/uint"}, {"type": "null"}]}
+      },
+      "additionalProperties": false
+    },
+    "correctness": {
+      "type": "object",
+      "required": ["checked_words", "output_words", "guard_words", "mismatch_count", "first_mismatch"],
+      "properties": {
+        "checked_words": {"const": 66},
+        "output_words": {"const": 64},
+        "guard_words": {"const": 2},
+        "mismatch_count": {"type": "integer", "minimum": 0, "maximum": 66},
+        "first_mismatch": {
+          "anyOf": [
+            {
+              "type": "object",
+              "required": ["index", "expected", "actual"],
+              "properties": {
+                "index": {"type": "integer", "minimum": 0, "maximum": 65},
+                "expected": {"$ref": "#/$defs/uint"},
+                "actual": {"$ref": "#/$defs/uint"}
+              },
+              "additionalProperties": false
+            },
+            {"type": "null"}
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "timing": {
+      "type": "object",
+      "required": [
+        "scope",
+        "clock",
+        "cpu_queue_submit_ns",
+        "cpu_fence_wait_ns",
+        "cpu_submit_to_completion_ns",
+        "gpu_execution_ns",
+        "gpu_timing_unavailable_reason"
+      ],
+      "properties": {
+        "scope": {"const": "correctness_dispatch"},
+        "clock": {"const": "steady_clock"},
+        "cpu_queue_submit_ns": {"$ref": "#/$defs/uint"},
+        "cpu_fence_wait_ns": {"$ref": "#/$defs/uint"},
+        "cpu_submit_to_completion_ns": {"$ref": "#/$defs/uint"},
+        "gpu_execution_ns": {"type": "null"},
+        "gpu_timing_unavailable_reason": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    },
+    "enabled": {
+      "type": "object",
+      "required": ["api_path", "extensions", "features", "queue_family", "queue_count"],
+      "properties": {
+        "api_path": {"const": "Vulkan 1.0 core"},
+        "extensions": {"const": []},
+        "features": {"const": []},
+        "queue_family": {"$ref": "#/$defs/uint"},
+        "queue_count": {"const": 1},
+        "buffer_memory": {
+          "type": "object",
+          "required": ["memory_type_index", "memory_property_flags", "allocation_bytes"],
+          "properties": {
+            "memory_type_index": {"$ref": "#/$defs/uint"},
+            "memory_property_flags": {"$ref": "#/$defs/uint"},
+            "allocation_bytes": {"type": "integer", "minimum": 264, "maximum": 1048576}
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "requirements": {
+      "type": "object",
+      "required": [
+        "minimum_api_version",
+        "required_extensions",
+        "required_features",
+        "required_formats",
+        "queue_flags",
+        "queue_count",
+        "local_size",
+        "group_count",
+        "storage_buffer_descriptors",
+        "bound_descriptor_sets",
+        "storage_buffer_bytes",
+        "memory_property_required",
+        "memory_allocation_count",
+        "max_allocation_bytes",
+        "fence_timeout_ns"
+      ],
+      "properties": {
+        "minimum_api_version": {"const": "1.0"},
+        "required_extensions": {"const": []},
+        "required_features": {"const": []},
+        "required_formats": {"const": []},
+        "queue_flags": {"const": "VK_QUEUE_COMPUTE_BIT"},
+        "queue_count": {"const": 1},
+        "local_size": {"const": [64, 1, 1]},
+        "group_count": {"const": [1, 1, 1]},
+        "storage_buffer_descriptors": {"const": 1},
+        "bound_descriptor_sets": {"const": 1},
+        "storage_buffer_bytes": {"const": 264},
+        "memory_property_required": {"const": "VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT"},
+        "memory_allocation_count": {"const": 1},
+        "max_allocation_bytes": {"const": 1048576},
+        "fence_timeout_ns": {"const": 5000000000}
+      },
+      "additionalProperties": false
+    }
+  }
+}

@@ -4,6 +4,8 @@ An open-source Vulkan validation, benchmarking, and regression testing framework
 
 **Status:** M0 passed on PS5 Slim firmware 13.60. The hardened compute title and the focused Khronos CTS title both passed and returned normally to the shell. [Build a deployable title](docs/HARNESS.md), [hardware acceptance record](docs/HARDWARE_VALIDATION.md#final-acceptance-session).
 
+The M1 portable runner builds on Linux and packages as a separate primary PS5 lab title. Slim acceptance is pending. [Linux build and tests](docs/HANDOFF.md#m1-portable-runner) · [M1 title and evidence workflow](docs/HARNESS.md#m1-portable-runner).
+
 ## Goals
 
 - Discover and validate Vulkan capabilities, including advertised versus working features.

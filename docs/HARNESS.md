@@ -72,3 +72,56 @@ tools/m0 accept "$app" build/cts-evidence/run-000001
 ```
 
 Use the actual new run number in both paths. The title journals the title, build and case, saves the upstream QPA and runner diagnostics in the fresh directory and records the return from the runner. Retrieval preserves available files even for an incomplete run. The retrieval receipt identifies the source run and records the availability of the title-filtered Manager and kernel logs. The QPA verifier checks the session and case framing, XML verdict, CTS release, Slim vendor and capture path. It retains the original QPA digest and verdict. Record observed shell behavior separately.
+
+## M1 portable runner
+
+The primary M1 lab title is **ProsperoVK Lab M1**, PPSA99745. By default it runs inventory on device 0 and the registered `core.compute.storage-buffer` case in one launch. The separate ID preserves both accepted M0 installations. Future native workloads belong in the shared registry and title. Build the title with the same pinned inputs as M0, including the public title SDK and static release RADV archive. The host verifier requires Python with Draft 2020-12 `jsonschema` support.
+
+```bash
+tools/m0 preflight
+tools/m0 package build/m1-title --m1
+app=build/m1-title/title/dist/PPSA99745
+tools/m0 verify "$app"
+sha256sum "$app.zip"
+```
+
+The folder includes the executable, runtime, title metadata, notices and build manifest. The ZIP contains that same folder. Preserve both alongside the deployment receipt. Host-only regression uses a passing Linux report with the same shader.
+
+```bash
+python3 -B tests/m1/harness.py "$app" build/m1-evidence/linux/report.json
+python3 -B tests/m1/ps5-adapter.py "$TEMPLATE"  # optional second argument for non-system Vulkan headers
+```
+
+After explicit deployment authorization, use the existing fresh-install transfer. It checks the catalog and directory before staging and publishing and verifies the published bytes. An occupied ID requires a separate replacement decision and verified backup.
+
+```bash
+tools/m0 deploy "$app" "$PS5_HOST"
+tools/m0 readback "$app" "$PS5_HOST"
+```
+
+After separate execution authorization, launch **ProsperoVK Lab M1** once on the Slim. Record the observed model, firmware, time, new run directory and whether the shell resumes normally. Stop after device loss, a suspected hang or the 60-second observation deadline. Use the actual run number below. Retrieval also checks the installed files against the host package. The case uses 264 bytes in a single storage buffer, a maximum 1 MiB allocation, one workgroup and a five-second fence wait.
+
+```bash
+run=run-000001
+out="build/m1-evidence/slim/$run"
+tools/m0 retrieve "$PS5_HOST" "$run" "$out" --app "$app"
+tools/m0 accept "$app" "$out"
+sha256sum "$out"/{start.log,report.json.start.json,report.json,exit-code.txt,retrieval.json}
+```
+
+Preserve the retrieved files and any partial captures under the ignored evidence tree. The report must agree with the manifest, shader digest, case start and return code. Record BUILD, PACKAGE, DEPLOY, EXECUTE, CORRECTNESS, PERFORMANCE and SHELL_EXIT independently. M1 captures a single CPU diagnostic sample. PERFORMANCE remains NOT_RUN. Use the operator observation for SHELL_EXIT.
+
+
+### Optional title selection
+
+After deploying and reading back the packaged files, an authorized operator can place an optional
+`selection.txt` alongside `eboot.bin`. Use one line containing `inventory` or
+`core.compute.storage-buffer`, optionally followed by one space and a zero-based unsigned decimal
+device index. For example, use `inventory 0` for inventory without case dispatch. Omit the file
+to use the default smoke case on device 0. Record the selected mode and device with the run.
+
+The title journals the mode and index in `start.log`. The acceptance command checks them against
+the terminal report and checks the case-start record when a workload starts. Both records
+identify their original run directory. An inventory-only
+pass records EXECUTE=PASS and CORRECTNESS=NOT_RUN. For this mode omit `report.json.start.json`
+from the hash command. Obtain launch authorization for each run.

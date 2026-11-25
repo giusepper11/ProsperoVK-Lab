@@ -61,7 +61,8 @@ def package(app):
     files = {p.relative_to(app).as_posix(): digest(p) for p in paths if p.is_file()}
     m = read_json(app / "build.json")
     workload = m.get("workload", "compute")
-    require(workload in ("compute", "cts") and (workload == "compute") == (title_id == ID),
+    require(workload in ("compute", "cts", "m1") and (workload == "compute") == (title_id == ID)
+            and (workload != "m1" or title_id == builder["M1_ID"]),
             "workload or title ID mismatch")
     required = {"eboot.bin", "build.json", "sce_module/libc.prx", "sce_sys/param.json", "sce_sys/icon0.png",
                 "LEGAL.txt", "licenses/GPL-3.0.txt", "licenses/PS5_Vulkan-NOTICE.md", "licenses/Template-MIT.md",
@@ -73,6 +74,10 @@ def package(app):
                                     externals=cts["EXTERNAL_PINS"]), "CTS provenance mismatch")
         require(m.get("lab_worktree") in ("clean", "dirty"), "missing CTS worktree status")
         required.update(f"licenses/{name}" for name in cts["NOTICE_NAMES"])
+    if workload == "m1":
+        require(m.get("case_id") == builder["M1_CASE"] and m.get("lab_worktree") in ("clean", "dirty"),
+                "M1 case or worktree provenance")
+        require(m.get("shader_sha256") == m["inputs"]["compute.spv"], "M1 shader provenance")
     require(required <= files.keys(), f"missing package files: {sorted(required - files.keys())}")
     zpath = app.with_suffix(".zip")
     zhash = digest(zpath)
@@ -99,6 +104,11 @@ def package(app):
             "cts-toolchain.txt", "vktComputeBasicComputeShaderTests.cpp", "vktComputeBasicComputeShaderTests.hpp",
             *(Path(name).name for name in archive_list.read_text().splitlines()),
         )
+    elif workload == "m1":
+        required_inputs += ("title.cpp", "runner.cpp", "runner.hpp", "inventory.cpp", "inventory.hpp",
+                            "compute.cpp", "compute.hpp", "storage.comp", "CMakeLists.txt",
+                            "compute.spv", "compute_spv.hpp", "runner.o", "inventory.o", "compute.o",
+                            "toolchain.txt", "run-v1.schema.json")
     else:
         required_inputs += ("main.cpp", "compute.cpp", "compute.comp", "compute.hpp",
                             "compute.o", "compute.spv", "toolchain.txt")
@@ -107,8 +117,9 @@ def package(app):
             all(re.fullmatch(r"[0-9a-f]{64}", value) for value in m["inputs"].values()),
             "incomplete source or toolchain identity")
     param = read_json(app / "sce_sys/param.json")
+    title_name = {"cts": builder["CTS_NAME"], "compute": builder["NAME"], "m1": builder["M1_NAME"]}[workload]
     require(param["titleId"] == title_id and param["conceptId"] == title_id[4:] and
-            param["localizedParameters"]["en-US"]["titleName"] == builder["CTS_NAME" if workload == "cts" else "NAME"] and
+            param["localizedParameters"]["en-US"]["titleName"] == title_name and
             param["contentId"].startswith(f"UP9000-{title_id}_00-"), "title metadata")
     require(files["eboot.bin"] == m["eboot_sha256"], "executable digest")
     for name in ("sce_sys/icon0.png", "sce_sys/param.json", "sce_module/libc.prx"):
@@ -134,6 +145,9 @@ def package(app):
         if workload == "cts":
             require(all(marker.encode() in payload for marker in (title_id, cts["CASE_ID"])),
                     "executable lacks CTS title ID or case")
+        elif workload == "m1":
+            markers = (title_id, m["lab_revision"], m["case_id"], m["shader_sha256"])
+            require(all(marker.encode() in payload for marker in markers), "executable lacks M1 provenance")
     return dict(BUILD="PASS", PACKAGE="PASS", build_id=identity, zip_sha256=zhash, workload=workload)
 
 
@@ -176,6 +190,49 @@ def run_report(run, identity):
     return dict(output, PERFORMANCE="PASS", cpu_ns=summaries)
 
 
+def m1_run_report(run, app, identity):
+    manifest = read_json(app / "build.json")
+    revision = manifest["lab_revision"]
+    start = (run / "start.log").read_text().splitlines()
+    require(len(start) == 6 and start[:3] == [f"build {identity}", f"revision {revision}", f"title {app.name}"],
+            "M1 title journal differs from the verified manifest")
+    require(start[3] in ("case inventory", f"case {manifest['case_id']}"), "invalid M1 selection")
+    case = None if start[3] == "case inventory" else manifest["case_id"]
+    device = re.fullmatch(r"device (0|[1-9][0-9]{0,9})", start[4])
+    require(device and int(device[1]) <= 0xFFFFFFFF, "invalid M1 device index")
+    device_index = int(device[1])
+    path = re.fullmatch(r"path /app0/(run-[0-9]{6})", start[5])
+    require(path, "invalid M1 capture path")
+    receipt = run / "retrieval.json"
+    if receipt.exists():
+        capture = read_json(receipt)
+        require((capture["run"], capture["title_id"], capture["build_id"]) ==
+                (path[1], app.name, identity), "M1 journal differs from retrieval receipt")
+    report = run / "report.json"
+    subprocess.run(["python3", "-B", TOOLS / "validate-m1.py", report],
+                   stdout=subprocess.DEVNULL, check=True)
+    data = read_json(report)
+    require((data["build_id"], data["revision"], data["target"], data["case_id"], data["shader_sha256"],
+             data["device_index"], data["run_id"]) == (identity, revision, "ps5", case,
+                                       manifest["shader_sha256"] if case else None, device_index, path[1]),
+            "M1 report provenance mismatch")
+    status = data["status"]
+    journal_path = run / "report.json.start.json"
+    if case is None:
+        require(not journal_path.exists(), "unexpected M1 inventory case journal")
+    elif status != "NOT_RUN":
+        journal = dict(schema_version=1, event="start", case_id=case, device_index=device_index,
+                       target="ps5", build_id=identity, revision=revision, run_id=path[1])
+        require(read_json(journal_path) == journal, "M1 case journal mismatch")
+    code = (run / "exit-code.txt").read_bytes()
+    allowed_codes = {"PASS": (b"0\n",), "NOT_RUN": (b"1\n", b"2\n")}.get(status, (b"1\n",))
+    require(code in allowed_codes, "M1 runner return code disagrees with status")
+    execution = {"NOT_RUN": "NOT_RUN", "UNSUPPORTED": "NOT_RUN",
+                 "TIMEOUT": "TIMEOUT", "ERROR": "ERROR"}.get(status, "PASS")
+    return dict(EXECUTE=execution, CORRECTNESS=status if case else "NOT_RUN", PERFORMANCE="NOT_RUN",
+                SHELL_EXIT="UNCONFIRMED", case_id=case, device_index=device_index, report_sha256=digest(report))
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -196,12 +253,16 @@ if __name__ == "__main__":
                 if out["workload"] == "cts":
                     report = runpy.run_path(str(TOOLS / "m0-cts-report.py"))["cts_run_report"]
                     out.update(report(args.run, args.app, out["build_id"]))
+                elif out["workload"] == "m1":
+                    out.update(m1_run_report(args.run, args.app, out["build_id"]))
                 else:
                     out.update(run_report(args.run, out["build_id"]))
             print(json.dumps(out, indent=2))
             if args.cmd == "run":
-                expected_performance = "NOT_RUN" if out["workload"] == "cts" else "PASS"
-                if (out["EXECUTE"], out["CORRECTNESS"], out["PERFORMANCE"]) != ("PASS", "PASS", expected_performance):
+                expected_performance = "PASS" if out["workload"] == "compute" else "NOT_RUN"
+                expected_correctness = "NOT_RUN" if out["workload"] == "m1" and out["case_id"] is None else "PASS"
+                if (out["EXECUTE"], out["CORRECTNESS"], out["PERFORMANCE"]) != (
+                        "PASS", expected_correctness, expected_performance):
                     raise SystemExit(1)
     except (OSError, ValueError, KeyError, TypeError, IndexError, subprocess.CalledProcessError,
             zipfile.BadZipFile, ET.ParseError) as error:

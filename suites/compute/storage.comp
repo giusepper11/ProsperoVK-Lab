@@ -1,0 +1,12 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+#version 450
+
+layout(local_size_x = 64) in;
+layout(set = 0, binding = 0, std430) writeonly buffer Results {
+    uint words[];
+} output_data;
+
+void main() {
+    uint index = gl_GlobalInvocationID.x;
+    output_data.words[1u + index] = 0x12340000u ^ index;
+}

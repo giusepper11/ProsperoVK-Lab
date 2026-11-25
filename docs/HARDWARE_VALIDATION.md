@@ -148,3 +148,19 @@ tools/m0 retrieve "$PS5_HOST" run-000001 "$run" --app "$app"
 tools/m0 accept "$app" "$run"
 python3 -B tools/verify-m0-cts-qpa.py "$CTS" "$run/TestResults.qpa"
 ```
+
+## M1 portable runner
+
+PPSA99745 is the primary M1 lab title. The intended target is the PS5 Slim used for M0. Record the observed firmware again for M1. Use the [M1 harness](HARNESS.md#m1-portable-runner) for the checked package, authorized deployment, separate launch and matching report retrieval.
+
+| Gate | M1 evidence |
+| --- | --- |
+| BUILD | PASS on the build host, using the public SDK and pinned static RADV build |
+| PACKAGE | PASS on the build host, complete title and matching ZIP structurally verified |
+| DEPLOY | NOT_RUN |
+| EXECUTE | NOT_RUN |
+| CORRECTNESS | NOT_RUN on Slim |
+| PERFORMANCE | NOT_RUN |
+| SHELL_EXIT | NOT_RUN |
+
+The Slim exit gate remains open. The M0 results above belong to their original titles and builds.

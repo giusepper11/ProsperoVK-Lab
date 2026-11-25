@@ -90,24 +90,34 @@ def retrieve(manager, name, out, app=None):
     if not re.fullmatch(r"run-[0-9]{6}", name):
         raise ValueError("expected run-NNNNNN")
     title_id = ID
+    workload = "compute"
     if app is not None:
-        accept["package"](app)
+        package = accept["package"](app)
         title_id = app.name
+        workload = package["workload"]
+        if workload == "m1":
+            compare(manager, app, f"{PARENT}/{title_id}")
     remote = f"{PARENT}/{title_id}/{name}"
     entries = {e["name"] for e in manager.entries(remote) if not e["is_dir"]}
     out.mkdir(parents=True, exist_ok=False)
-    artifacts = (("result.json", "timing.json", "timing-exit-code.txt") if title_id == ID
-                 else ("TestResults.qpa", "title.log"))
+    artifacts = {
+        "compute": ("result.json", "timing.json", "timing-exit-code.txt"),
+        "cts": ("TestResults.qpa", "title.log"),
+        "m1": ("report.json", "report.json.start.json"),
+    }[workload]
     for file in ("start.log", "exit-code.txt", *artifacts):
         if file in entries:
             (out / file).write_bytes(manager.download(f"{remote}/{file}"))
     capture = {"title_id": title_id, "run": name}
-    title_name = "ProsperoVK Lab" if title_id == ID else "ProsperoVK Lab CTS"
+    if workload == "m1":
+        capture["build_id"] = package["build_id"]
+    title_name = {"compute": "ProsperoVK Lab", "cts": "ProsperoVK Lab CTS", "m1": "ProsperoVK Lab M1"}[workload]
     for route, filename in (("klogs", "title-klog.log"), ("logs", "manager-title.log")):
         try:
             log = manager.request(route)
             lines = [str(line) for line in log["lines"] if title_id in str(line)
-                     or (title_name in str(line) and (title_id != ID or "ProsperoVK Lab CTS" not in str(line)))]
+                     or (title_name in str(line) and (workload != "compute" or not
+                         any(other in str(line) for other in ("ProsperoVK Lab CTS", "ProsperoVK Lab M1"))))]
             (out / filename).write_text("".join(s + "\n" for s in lines))
             capture[route] = dict(connected=log.get("connected"), matched_lines=len(lines))
         except (URLError, TimeoutError, ValueError, KeyError) as error:
@@ -127,7 +137,7 @@ if __name__ == "__main__":
     command.add_argument("host")
     command.add_argument("run")
     command.add_argument("out", type=Path)
-    command.add_argument("--app", type=Path, help="verified local title folder (required for CTS)")
+    command.add_argument("--app", type=Path, help="verified local title folder (required for CTS and M1)")
     args = parser.parse_args()
     manager = Manager(args.host)
     if args.cmd == "deploy":

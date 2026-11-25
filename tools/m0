@@ -7,19 +7,23 @@ cmd=${1:-help}
 shift || true
 case "$cmd" in
 preflight|package)
-    cts_args=()
+    title_args=()
     title_id=PPSA99743
     if [[ "$cmd" == package ]]; then
         out=$(realpath -m "${1:?provide a fresh output directory}")
         shift
         if (($#)); then
-            if [[ $# != 2 || $1 != --cts-title-id || ! $2 =~ ^PPSA[0-9]{5}$ || $2 == "$title_id" ]]; then
-                echo "expected --cts-title-id PPSAxxxxx with a title ID distinct from PPSA99743" >&2
+            if [[ $# == 1 && $1 == --m1 ]]; then
+                title_id=PPSA99745
+                title_args=(--m1)
+            elif [[ $# == 2 && $1 == --cts-title-id && $2 =~ ^PPSA[0-9]{5}$ && $2 != "$title_id" && $2 != PPSA99745 ]]; then
+                title_id=$2
+                : "${CTS:?pinned Khronos VK-GL-CTS checkout}"
+                title_args=(--cts "$CTS" --title-id "$title_id")
+            else
+                echo "expected --m1 or --cts-title-id PPSAxxxxx distinct from PPSA99743 and PPSA99745" >&2
                 exit 2
             fi
-            title_id=$2
-            : "${CTS:?pinned Khronos VK-GL-CTS checkout}"
-            cts_args=(--cts "$CTS" --title-id "$title_id")
         fi
     fi
     : "${TEMPLATE:?PS5_VulkanTemplate checkout}" "${VULKAN:?built PS5_Vulkan checkout}" "${MESA:?PS5_Mesa checkout}"
@@ -35,10 +39,10 @@ preflight|package)
     [[ "$cmd" == preflight ]] && exit 0
     mkdir -p "$(dirname "$out")"
     mkdir "$out"
-    if ((${#cts_args[@]} == 0)); then
+    if ((${#title_args[@]} == 0)); then
         bash "$fixture/cross-check.sh" "$out/cross" "$ARCHIVE_SDK" "$RADV" --timing
     fi
-    python3 "$root/tools/build-m0-title.py" "$out/title" "$TEMPLATE" "$VULKAN" "$MESA" "$TITLE_SDK" "$RADV" "$out/cross" "$SDK_SOURCE" "${cts_args[@]}"
+    python3 "$root/tools/build-m0-title.py" "$out/title" "$TEMPLATE" "$VULKAN" "$MESA" "$TITLE_SDK" "$RADV" "$out/cross" "$SDK_SOURCE" "${title_args[@]}"
     python3 "$root/tools/m0-accept.py" package "$out/title/dist/$title_id"
     ;;
 linux)
@@ -56,5 +60,5 @@ verify|accept)
 deploy|readback|retrieve)
     exec python3 "$root/tools/m0-transfer.py" "$cmd" "$@"
     ;;
-*) echo "Usage: tools/m0 preflight | linux OUT [CMAKE_ARGS...] | package NEW_OUT [--cts-title-id PPSAxxxxx] | verify FOLDER | accept FOLDER RUN | deploy FOLDER HOST | readback FOLDER HOST | retrieve HOST RUN NEW_OUT [--app FOLDER]" >&2; exit 2 ;;
+*) echo "Usage: tools/m0 preflight | linux OUT [CMAKE_ARGS...] | package NEW_OUT [--m1 | --cts-title-id PPSAxxxxx] | verify FOLDER | accept FOLDER RUN | deploy FOLDER HOST | readback FOLDER HOST | retrieve HOST RUN NEW_OUT [--app FOLDER]" >&2; exit 2 ;;
 esac

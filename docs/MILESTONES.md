@@ -1,6 +1,6 @@
 # Milestones
 
-M0 passed final acceptance on 2026-11-25. M1–M7 are planned. Each milestone must have an OpenSpec change (or explicit documentation-only exception), tests, artifacts and a reviewable exit gate. Dependencies are listed below. Independent tasks within a milestone may proceed in parallel.
+M0 passed final acceptance on 2026-11-25. M1 is in progress. M2–M7 are planned. Each milestone must have an OpenSpec change (or explicit documentation-only exception), tests, artifacts and a reviewable exit gate. Dependencies are listed below. Independent tasks within a milestone may proceed in parallel.
 
 | ID | Outcome | Depends on |
 | --- | --- | --- |
@@ -36,9 +36,9 @@ The reproducible title review archives cover both the PS5 smoke and timing ELFs 
 Exit: reproducible audit, pinned dependency plan, host build feasibility and console smoke evidence or explicit blocked hardware gate. Do not close M0 until required console feasibility is demonstrated or maintainer changes scope.
 
 ## M1: discovery and portable runner
-- [ ] CMake host build, minimal CLI, registry, result schema, explicit error statuses, bounded execution and cleanup.
-- [ ] Enumerate Vulkan version, driver/device IDs, features, extensions, formats, limits, queues and memory types.
-- [ ] Run one deterministic offscreen compute or graphics smoke case with readback.
+- [x] CMake host build, minimal CLI, registry, result schema, explicit error statuses, bounded execution and cleanup.
+- [x] Enumerate Vulkan version, driver/device IDs, features, extensions, formats, limits, queues and memory types.
+- [x] Run one deterministic offscreen compute or graphics smoke case with readback.
 - [ ] Implement PS5 adapter from verified public APIs; capture firmware, driver revision and report on actual Slim.
 Exit: host tests pass, Linux and PS5 reports parse against versioned schema, smoke output matches CPU reference, absent features skip with reason.
 
