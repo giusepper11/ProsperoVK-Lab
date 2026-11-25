@@ -87,7 +87,7 @@ def main(app, report_path):
             ("report.json.start.json", write_json(dict(journal, device_index=1))),
             ("report.json.start.json", write_json(dict(journal, run_id="run-000002"))),
             ("exit-code.txt", b"1\n"),
-            ("report.json", write_json(dict(report, target="linux"))),
+            ("report.json", write_json(dict(report, target="linux", run_id="0" * 32))),
             ("report.json", write_json(dict(report, run_id="run-000002"))),
             ("report.json", write_json(dict(report, shader_sha256="0" * 64))),
         ]:
