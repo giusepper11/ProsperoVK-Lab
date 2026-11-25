@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+set -euo pipefail
+root=$(cd "$(dirname "$0")/.." && pwd)
+fixture="$root/tests/fixtures/m0-radv-compute"
+cmd=${1:-help}
+shift || true
+case "$cmd" in
+preflight|package)
+    cts_args=()
+    title_id=PPSA99743
+    if [[ "$cmd" == package ]]; then
+        out=$(realpath -m "${1:?provide a fresh output directory}")
+        shift
+        if (($#)); then
+            if [[ $# != 2 || $1 != --cts-title-id || ! $2 =~ ^PPSA[0-9]{5}$ || $2 == "$title_id" ]]; then
+                echo "expected --cts-title-id PPSAxxxxx with a title ID distinct from PPSA99743" >&2
+                exit 2
+            fi
+            title_id=$2
+            : "${CTS:?pinned Khronos VK-GL-CTS checkout}"
+            cts_args=(--cts "$CTS" --title-id "$title_id")
+        fi
+    fi
+    : "${TEMPLATE:?PS5_VulkanTemplate checkout}" "${VULKAN:?built PS5_Vulkan checkout}" "${MESA:?PS5_Mesa checkout}"
+    : "${TITLE_SDK:?template SDK installation}" "${ARCHIVE_SDK:?RADV SDK installation}" "${RADV:?verified RADV release directory}" "${SDK_SOURCE:?PS5_PayloadSDK checkout}"
+    for tool in python3 git cmake ninja clang ld.lld llvm-nm glslangValidator spirv-val rg readelf sha256sum; do
+        command -v "$tool" >/dev/null || { echo "missing tool: $tool" >&2; exit 1; }
+    done
+    python3 -c 'from PIL import Image, ImageDraw, ImageFont; from hashlib import file_digest'
+    for file in "$VULKAN/build/host/ps5-native-tool" "$VULKAN/runtime/libc.prx" "$TEMPLATE/ps5/tools/link-title.sh" \
+        "$RADV/lib/libvulkan_radeon.ps5.a" "$TITLE_SDK/bin/prospero-lld" "$ARCHIVE_SDK/bin/prospero-clang++" \
+        /usr/share/doc/{libllvm21,fonts-dejavu-core}/copyright; do test -r "$file" || { echo "missing $file" >&2; exit 1; }; done
+    python3 "$root/tools/m0-accept.py" inputs
+    [[ "$cmd" == preflight ]] && exit 0
+    mkdir -p "$(dirname "$out")"
+    mkdir "$out"
+    if ((${#cts_args[@]} == 0)); then
+        bash "$fixture/cross-check.sh" "$out/cross" "$ARCHIVE_SDK" "$RADV" --timing
+    fi
+    python3 "$root/tools/build-m0-title.py" "$out/title" "$TEMPLATE" "$VULKAN" "$MESA" "$TITLE_SDK" "$RADV" "$out/cross" "$SDK_SOURCE" "${cts_args[@]}"
+    python3 "$root/tools/m0-accept.py" package "$out/title/dist/$title_id"
+    ;;
+linux)
+    out=${1:?provide a build directory}; shift
+    capture=()
+    if [[ -n ${TEMPLATE:-} ]]; then capture+=("-DM0_TEMPLATE_SRC=$TEMPLATE"); fi
+    cmake -S "$fixture" -B "$out" -G Ninja -DCMAKE_BUILD_TYPE=Release "${capture[@]}" "$@"
+    cmake --build "$out"
+    ctest --test-dir "$out" --output-on-failure
+    ;;
+verify|accept)
+    mode=package; [[ "$cmd" == accept ]] && mode=run
+    exec python3 "$root/tools/m0-accept.py" "$mode" "$@"
+    ;;
+deploy|readback|retrieve)
+    exec python3 "$root/tools/m0-transfer.py" "$cmd" "$@"
+    ;;
+*) echo "Usage: tools/m0 preflight | linux OUT [CMAKE_ARGS...] | package NEW_OUT [--cts-title-id PPSAxxxxx] | verify FOLDER | accept FOLDER RUN | deploy FOLDER HOST | readback FOLDER HOST | retrieve HOST RUN NEW_OUT [--app FOLDER]" >&2; exit 2 ;;
+esac

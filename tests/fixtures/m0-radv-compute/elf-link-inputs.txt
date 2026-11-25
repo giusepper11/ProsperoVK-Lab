@@ -1,0 +1,9 @@
+8cd7dd973cea3b5ec0581e9e5369de771048b1d7 vendor/ps5/sdk/stubs/agc_canary_link_stub.c
+40b60d71db93e269dc7b4c6e3371af69c1f296b2 vendor/ps5/sdk/stubs/agc_driver_canary_link_stub.c
+7486ae4079b143a26b03b1aec26aa7f7d721edff tooling/psbc/ps5-pie-unwind.ld
+91fd169b4de5b54ffb55915992bd14cb41f53461 tooling/native/ps5-pie.ld
+f6cbd54a293e2916c420bbf14b79cff510085415 tooling/native/app_crt.cpp
+f7f80a4e69f2dd992de4dac53ed33d6ed1fd48f4 tooling/native/app_cpp_runtime.cpp
+9f1c896d1a89bb356102a7a1228e70ef9ec85cf4 tooling/native/app-symbols.map
+be8f272d1402575d6e0197ab672275f6672de98b tooling/prospero-clang18
+3d830cc13717eec87896731a5e2ec608531a9e84 tools/radv-link.sh

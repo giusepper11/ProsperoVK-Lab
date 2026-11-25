@@ -2,7 +2,7 @@
 
 An open-source Vulkan validation, benchmarking, and regression testing framework for PlayStation 5, designed to accelerate graphics driver development and optimization.
 
-**Status:** Planning scaffold. No executable, performance baseline, or console compatibility claim exists yet.
+**Status:** M0 passed on PS5 Slim firmware 13.60. The hardened compute title and the focused Khronos CTS title both passed and returned normally to the shell. [Build a deployable title](docs/HARNESS.md), [hardware acceptance record](docs/HARDWARE_VALIDATION.md#final-acceptance-session).
 
 ## Goals
 
@@ -20,9 +20,16 @@ Initial proposed hardware target: PS5 Slim, firmware 13.60, subject to M0 verifi
 - [Architecture](docs/ARCHITECTURE.md): component boundaries and execution model.
 - [Roadmap](docs/MILESTONES.md): milestones and exit criteria.
 - [Benchmark methodology](docs/BENCHMARK_METHODOLOGY.md): measurement and comparison rules.
-- [Upstream audit](docs/UPSTREAM.md): candidates and integration gates.
+- [Upstream audit](docs/UPSTREAM.md): pinned sources, reuse decisions and integration gates.
+- [Vulkan coverage](docs/VULKAN_COVERAGE.md): test candidates, prerequisites and evidence.
+- [M0 toolchain evidence](docs/M0_TOOLCHAIN.md): Linux checks and the pinned PS5 RADV cross-build.
 - [Hardware validation](docs/HARDWARE_VALIDATION.md): console safety and evidence.
+- [M0 handoff](docs/HANDOFF.md): verified work, reproduction commands and the remaining hardware gate.
 - [OpenSpec workflow](openspec/README.md): change management.
 - [Contributing](CONTRIBUTING.md): how to submit changes.
 
-This is an independent research project, not affiliated with Sony or Khronos. Running selected CTS cases does not constitute Vulkan certification. License selection for original code is pending maintainer approval; do not vendor third-party code until license compatibility is checked.
+This is an independent research project, not affiliated with Sony or Khronos. Running selected CTS cases does not constitute Vulkan certification.
+
+## License
+
+The lab's original work is licensed under the GNU General Public License, version 3 or any later version (`GPL-3.0-or-later`). Third-party work retains its own license and notices. [License text](LICENSE), [upstream provenance](docs/UPSTREAM.md).

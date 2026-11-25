@@ -1,6 +1,6 @@
 # Milestones
 
-All milestones are planned. No dates or hardware results are assumed. Each milestone must have an OpenSpec change (or explicit documentation-only exception), tests, artifacts and a reviewable exit gate. Dependencies are listed below; independent tasks within a milestone may proceed in parallel.
+M0 passed final acceptance on 2026-11-25. M1–M7 are planned. Each milestone must have an OpenSpec change (or explicit documentation-only exception), tests, artifacts and a reviewable exit gate. Dependencies are listed below. Independent tasks within a milestone may proceed in parallel.
 
 | ID | Outcome | Depends on |
 | --- | --- | --- |
@@ -14,11 +14,25 @@ All milestones are planned. No dates or hardware results are assumed. Each miles
 | M7 | Evidence-led driver improvements | M6 |
 
 ## M0: audit and feasibility
-- [ ] Record upstream revisions, licenses, build entry points, existing tests, and actual CTS port/report mechanism.
-- [ ] Map Vulkan features and limits to test candidates; distinguish mandatory, optional and unavailable.
-- [ ] Verify SDK/toolchain and packaging from public sources. Determine Linux and console run/log retrieval commands, with a minimal console smoke experiment where feasible.
-- [ ] Document firmware 13.60 compatibility evidence or blocker, device access, resource limits and unresolved interfaces.
-- [ ] Decide original-code license with maintainer; record integration choices and first OpenSpec implementation proposal.
+
+- [x] Record upstream revisions, licenses, build entry points, existing tests, and the documented CTS port/report mechanism. The local focused port and pinned upstream runner are identified in the CTS deployment package. [Upstream audit](UPSTREAM.md).
+- [x] Map Vulkan features and limits to test candidates, including required, optional and upstream-reported unavailable features. [Coverage matrix](VULKAN_COVERAGE.md).
+- [x] Build and structurally validate the complete standalone compute title folder and its deployment ZIP on the host. [Title package and hashes](M0_TOOLCHAIN.md#build-the-deployable-m0-title).
+- [x] Verify standalone execution, exact compute verdict, CPU timing capture and report retrieval on PS5 Slim firmware 13.60. [Verified baseline](HARDWARE_VALIDATION.md#first-verified-slim-baseline).
+- [x] Confirm compute notification delivery and normal shell exit on the hardened build. [Hardened result](HARDWARE_VALIDATION.md#hardened-compute-result).
+- [x] Obtain the selected CTS hardware QPA, matching build provenance and normal title exit (M0 audit tasks 2.1–2.2). [Original hardware QPA and shell observation](HARDWARE_VALIDATION.md#focused-cts-result).
+- [x] Document the firmware 13.60 compatibility blocker, device access, resource limits and unresolved interfaces. [Audit risks](UPSTREAM.md#risks-and-outstanding-evidence), [M0 issue](https://github.com/giusepper11/ProsperoVK-Lab/issues/1).
+- [x] Record the original-work license and integration choices. [GPL-3.0-or-later](../LICENSE), [upstream audit](UPSTREAM.md), [M1 implementation proposal](../openspec/changes/m1-portable-vulkan-smoke/proposal.md).
+- [x] Review the integrated components, asset and distribution requirements against the final title manifest. Public distribution remains pending a corresponding-source and notices review for the release build. [Final title review](UPSTREAM.md#packaged-title-review). [Component review](UPSTREAM.md#standalone-compute-component-review).
+
+The [archived feasibility change](../openspec/changes/archive/2026-11-25-m0-upstream-feasibility-audit/proposal.md) and [hardware acceptance record](HARDWARE_VALIDATION.md#final-acceptance-session) close M0. Linux provided the reference result. Separate Slim runs established standalone compute correctness, CPU timing, normal shell exit and the original Khronos CTS result.
+
+The original Khronos CTS case passed on Linux with the local headless adapter. The focused PS5-target CTS ELF and the standalone RADV smoke ELF linked reproducibly on the build host. The packaged compute title has passed host checks. The focused CTS title passed host package validation and live deployment readback. [Local CTS build](M0_TOOLCHAIN.md#link-the-focused-cts-executable-for-ps5), [standalone evidence](M0_TOOLCHAIN.md#standalone-radv-compute).
+
+The standalone compute timing probe verified raw host samples, accuracy checks and optional detailed logs in Linux. The same probe produces a reproducible PS5-target ELF with recorded clock and logging imports. The portable runner and GPU timestamp investigation retain their milestone gates. [Linux timing evidence](M0_TOOLCHAIN.md#run-the-homebrew-timing-probe-on-linux), [PS5 build evidence](M0_TOOLCHAIN.md#cross-build-the-homebrew-timing-probe-for-ps5).
+
+The reproducible title review archives cover both the PS5 smoke and timing ELFs with their build, dependency and capture records. The standalone compute deployment package is recorded separately above. [Smoke archive](M0_TOOLCHAIN.md#stage-the-title-review-archive), [timing archive](M0_TOOLCHAIN.md#export-the-timing-review-zip).
+
 Exit: reproducible audit, pinned dependency plan, host build feasibility and console smoke evidence or explicit blocked hardware gate. Do not close M0 until required console feasibility is demonstrated or maintainer changes scope.
 
 ## M1: discovery and portable runner
