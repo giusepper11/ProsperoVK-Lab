@@ -2,7 +2,7 @@
 
 An open-source Vulkan validation, benchmarking, and regression testing framework for PlayStation 5, designed to accelerate graphics driver development and optimization.
 
-**Status:** The standalone compute smoke and CPU timing probe passed on PS5 Slim firmware 13.60. M0 remains open for CTS hardware and shell-exit evidence. [Build a deployable title](docs/HARNESS.md), [verified hardware baseline](docs/HARDWARE_VALIDATION.md#first-verified-slim-baseline).
+**Status:** M0 passed on PS5 Slim firmware 13.60. The hardened compute title and the focused Khronos CTS title both passed and returned normally to the shell. [Build a deployable title](docs/HARNESS.md), [hardware acceptance record](docs/HARDWARE_VALIDATION.md#final-acceptance-session).
 
 ## Goals
 

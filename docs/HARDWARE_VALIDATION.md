@@ -1,6 +1,6 @@
 # Hardware validation
 
-M0 target: PS5 Slim, firmware 13.60, with an operator-provided authorized environment. The operator confirmed the Slim model, and Prospero Manager reported the firmware. The standalone hardware smoke and CPU timing capture passed. The hardened compute title also completed and returned to the shell. CTS requires its own hardware evidence. [Verified baseline](#first-verified-slim-baseline). The [upstream audit](UPSTREAM.md) identifies external console runs on other configurations. [Toolchain evidence](M0_TOOLCHAIN.md) records the local target compilation, archive build and link checks.
+M0 target: PS5 Slim, firmware 13.60, with an operator-provided authorized environment. The operator confirmed the Slim model, and Prospero Manager reported the firmware. The standalone hardware smoke and CPU timing capture passed. The hardened compute title also completed and returned to the shell. The [focused CTS run](#focused-cts-result) passed independently. [Verified baseline](#first-verified-slim-baseline). The [upstream audit](UPSTREAM.md) identifies external console runs on other configurations. [Toolchain evidence](M0_TOOLCHAIN.md) records the local target compilation, archive build and link checks.
 
 ## Runbook
 1. Verify platform adapter, public toolchain, binary hash, driver revision, deployment method and documented recovery procedure on the actual device.
@@ -27,7 +27,7 @@ On 2026-11-25, Prospero Manager uploaded the timing review ZIP to the lab's data
 
 ## M0 operator smoke
 
-The first run is one offscreen Vulkan compute case from the pinned CTS baseline. It uses an existing authorized CTS title with a verified PS5 port, a known RADV archive and an operator-approved launch, writable directory, and recovery path. The title, fork revision and console deployment commands have yet to be supplied for the Slim. Record `NOT_RUN` if one of these prerequisites is missing. The [toolchain page](M0_TOOLCHAIN.md#reproduce-the-sdk-and-release-archive-build) gives the RADV archive build and digest commands.
+The accepted local package has its own [focused CTS run procedure](HARNESS.md#focused-cts-title). The original external-title procedure below documents the upstream alternative. It uses an existing authorized CTS title with a verified PS5 port, a known RADV archive and an operator-approved launch, writable directory, and recovery path. The title, fork revision and console deployment commands have yet to be supplied for the Slim. Record `NOT_RUN` if one of these prerequisites is missing. The [toolchain page](M0_TOOLCHAIN.md#reproduce-the-sdk-and-release-archive-build) gives the RADV archive build and digest commands.
 
 1. Before transfer, verify the publisher, build manifest and SHA-256 of the launch artifact. Media Player Classic PS5 also uses `PPSA99015`, so confirm the CTS build identity for any catalog match. Record the console model, firmware, environment version, toolchain and SDK revisions, base CTS commit, port revision, compiled external revisions and RADV archive hash and variant. Use a fresh run directory and verify a test file can be written and retrieved through the approved transfer mechanism. Record the actual build, transfer, launch and retrieval commands or UI actions with console identifiers redacted. [Title identity findings](UPSTREAM.md#cts-execution-and-report-ingestion).
 2. For the documented upstream CTS title layout, stage the following arguments in `cts/args.txt` in the authorized title's content directory. Confirm from the title manifest that the directory maps to `/app0/cts/` and the build accepts these arguments. Move any prior `cts/TestResults.qpa` into its own run directory before launch so the new run starts with no QPA at that path.
@@ -121,3 +121,30 @@ PPSA99743, lab revision `163910f24a9c139fd76815be93e802a26a2ec65c`, build ID `da
 | SHELL_EXIT | PASS by operator observation. A notification was visible too briefly to transcribe. The home screen returned automatically within 60 seconds without a crash dialog or manual close. Both title-filtered Manager logs were empty. |
 
 Local evidence is in `build/m0-final-acceptance/hardened/run-000002/`. Journal SHA-256 `4cbebf8a6506f0c647c41abe3e8c783e9ea8fe1830baf8422c6c04e8a3e553c0`, result `6b4fc0ce65d80a9302781e6f37db0d2add2fa31cb7d1b4e069fac3792985bb2c`, timing `a252638ce96a3e88c783ceec7f0b5b8a27ed28411cec247a74b408558392fb8d`. Both return-code hashes match the original baseline. The original run retains its own shell-exit status.
+
+### Focused CTS result
+
+On the same Slim the operator authorized a separate deployment and one launch of **ProsperoVK Lab CTS**, PPSA99744. The deployed artifact is the [35-file CTS build](M0_TOOLCHAIN.md#focused-cts-deployment-package) at lab commit `86386bd88d494c433cbc599ad3c75269a35a8995`. The original hardware QPA is preserved at `build/m0-final-acceptance/cts-evidence/run-000001/TestResults.qpa` (5,534 bytes). This run number belongs to PPSA99744.
+
+| Gate | Evidence |
+| --- | --- |
+| BUILD / PACKAGE | PASS. Build ID `1b3e7351ff45de07319c00871048eb9b49ac2a1692c0a1c98277ea4274cb910d`, ZIP SHA-256 `f58f3c665bdc159165e211b3c2c0c957af813cc1dfd06093344c9e90ad540bf5`. |
+| DEPLOY | PASS. The harness validated the stage and read back all 35 published files. Manager subsequently listed PPSA99744. |
+| EXECUTE | PASS. Fresh journal identifies the deployed title, build and case. The upstream runner returned zero. The QPA identifies `PlayStation 5 GPU (RADV NAVI21)`, vendor 0x1002 and device 0x0. |
+| CORRECTNESS | PASS. One complete session and one complete `dEQP-VK.compute.pipeline.basic.copy_ssbo_single_invocation` case. The pinned parser reported `Pass`, detail `Compute succeeded`. QPA SHA-256 `c408bdcaf63548753a5f892c778c6c6de28f81614c8f2ac34e23ce3e12a69760`. |
+| PERFORMANCE | NOT_RUN. This case supplies a correctness verdict. |
+| SHELL_EXIT | PASS. The title log recorded the request to close after the runner returned zero. The operator separately observed normal automatic closure. |
+
+The title log reports 1/1 passed and two RADV diagnostics about invalid PCI bus information for device UUID computation. The kernel feed remained disconnected; neither Manager log yielded title-specific lines. Title log SHA-256 `6011b0f260cbf4b2d573d5988f2898e090841f1a34e68c0a2970fa72b35f6013`, journal `c39275cea7bae19d0ef71633f4b1ada8f4ec461a0ed535ba26f8b30820efe369`, return code `9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa`. Raw files remain in the ignored evidence directory.
+
+```bash
+source /tmp/prosperovk-harness-env.sh
+export CTS="$PWD/build/m0-cts/source"
+app=build/m0-final-acceptance/cts/title/dist/PPSA99744
+run=build/m0-final-acceptance/cts-evidence/run-000001
+tools/m0 deploy "$app" "$PS5_HOST"
+# Operator launches PPSA99744 once and observes shell exit.
+tools/m0 retrieve "$PS5_HOST" run-000001 "$run" --app "$app"
+tools/m0 accept "$app" "$run"
+python3 -B tools/verify-m0-cts-qpa.py "$CTS" "$run/TestResults.qpa"
+```

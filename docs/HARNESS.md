@@ -32,7 +32,7 @@ The output contains `cross/` for compiler, shader, object and input checksums, `
 
 ## Transfer and evidence
 
-For manual deployment, verify the ZIP and extract its single `PPSA99743` root. Check the title ID and destination are free. Transfer that directory to `/data/homebrew/`, with `eboot.bin` immediately under `PPSA99743/`. This system already has the hardware-tested build under that ID. Preserve its run directories.
+For manual deployment, verify the ZIP and extract its single `PPSA99743` root. Check the title ID and destination are free. Transfer that directory to `/data/homebrew/`, with `eboot.bin` immediately under `PPSA99743/`. This system has the hardened compute build under that ID, with the original run preserved. Preserve its run directories.
 
 For an explicitly authorized fresh transfer, set `PS5_HOST` locally to the console's LAN IPv4 address. The transfer commands use the Prospero Manager file API on port 7070. The deploy command aborts on an occupied title ID. It stages the folder, reads back each file, publishes by renaming the directory, and checks the published bytes. A failed transfer prints the unique staging path for inspection. Launch is manual.
 

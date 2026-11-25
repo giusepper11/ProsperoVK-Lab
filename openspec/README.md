@@ -10,6 +10,6 @@ OPENSPEC_TELEMETRY=0 openspec validate --all --strict
 
 Use one focused change per deliverable. Capture proposal, design where applicable, specification deltas and acceptance tasks. Verify against the milestone and actual target. Archive only after implementation and evidence are reviewed. Keep the current accepted behavior in specs/; active changes in changes/. Do not create duplicate planning documents when an accepted specification is sufficient.
 
-- [M0 feasibility audit](changes/m0-upstream-feasibility-audit/proposal.md) records the audit and keeps the remaining gates open.
-- [M0 standalone RADV compute check](changes/m0-radv-compute-smoke/proposal.md) tracks the bounded Vulkan workload and its build and runtime evidence.
+- [M0 feasibility audit](changes/archive/2026-11-25-m0-upstream-feasibility-audit/proposal.md) records the accepted audit and Slim hardware evidence.
+- [M0 standalone RADV compute check](changes/archive/2026-11-25-m0-radv-compute-smoke/proposal.md) records the accepted compute workload and its build and hardware evidence.
 - [M1 portable Vulkan smoke](changes/m1-portable-vulkan-smoke/proposal.md) is the proposed implementation contract. It depends on M0.

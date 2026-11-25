@@ -15,7 +15,7 @@ Run date 2026-11-24 on Ubuntu 26.04.1 LTS x86-64, lab base `abee1ca738e3ddfd0ee9
 | PS5-target RADV relocatable link | Same SDK and RADV archives, Ubuntu LLD 21.1.8 and compiler builtins | `PASS` on the build host. The ICD getter and four SDK allocation wrappers resolved. The whole-archive link retained the definition of `radv_CreateDescriptorPool`, which was weak and undefined after selective archive extraction. |
 | PS5-target standalone compute ELF link | Same SDK, RADV archive and LLD, with public PS5_Vulkan startup and AGC link stubs at the pinned revision | `PASS` on the build host. Two links produced byte-identical x86-64 PIE ELFs with seven declared shared libraries and 284 strong dynamic imports. [Standalone link evidence](#link-the-build-host-elf). |
 | PS5 CTS title build preflight | Khronos CTS `f6a29701220f34dd1407513bfe80d74ca7b392ce` and the staged SDK above | CMake exited 1 because the checkout lacks `targets/ps5/ps5.cmake`. The staged SDK libraries supplied none of the five AGC imports left by the RADV relocatable link. [Build preflight](#ps5-cts-build-preflight). |
-| PS5 title and console runtime | Management connection verified. The operator confirmed a PS5 Slim and Prospero Manager reported firmware 13.60. The CTS title was absent from the registered title list. | Final title build and Vulkan smoke `NOT_RUN`. [Console preflight](HARDWARE_VALIDATION.md#m0-console-preflight). |
+| PS5 title and console runtime | Management connection verified. The operator confirmed a PS5 Slim and Prospero Manager reported firmware 13.60. The CTS title was absent from the registered title list. | At preflight the title was absent. See the [final acceptance session](HARDWARE_VALIDATION.md#final-acceptance-session) for the deployed builds. [Console preflight](HARDWARE_VALIDATION.md#m0-console-preflight). |
 | OpenSpec | OpenSpec 1.14.0, Node v26.8.2, npm 11.19.1 | Initialized repo-local `spec-driven` configuration and created the M0 and M1 changes. [Workflow](../openspec/README.md). |
 
 ## Reproduce the Linux checks
@@ -709,8 +709,50 @@ python3 tests/fixtures/m0-title/check-host.py build/m0-title-final/work/test-cap
   tools/verify-m0-radv-compute.py
 ```
 
-At package creation console execution was `NOT_RUN`. The later hardware run verified writable capture and exercised the workload’s runtime imports. Notification delivery and normal shell exit remain unconfirmed. [Manual deployment and capture](HARDWARE_VALIDATION.md#m0-standalone-radv-compute-check).
+At package creation console execution was `NOT_RUN`. The later hardware run verified writable capture and exercised the workload’s runtime imports. The original run had no independent exit observation. A later [hardened run](HARDWARE_VALIDATION.md#hardened-compute-result) confirmed notification delivery and normal shell exit. [Manual deployment and capture](HARDWARE_VALIDATION.md#m0-standalone-radv-compute-check).
 
 ### Harness acceptance
 
 The supported entry point is [the M0 harness](HARNESS.md). The packaging section above records the original experiment. The unchanged hardware package and run are identified in [the first hardware baseline](HARDWARE_VALIDATION.md#first-verified-slim-baseline). Host rebuilds from later revisions carry distinct build IDs and require their own target evidence.
+
+### Focused CTS deployment package
+
+From clean commit `86386bd88d494c433cbc599ad3c75269a35a8995` the [M0 harness](HARNESS.md#focused-cts-title) built the selected Khronos case, its original application runner and QPA writer with the pinned SDK. The title uses the template shell lifecycle and a local adapter for libc++'s diagnostic path-length query. For a valid path the adapter reports an indeterminate maximum and lets libc++ use its getcwd fallback. The final link passed the template's runtime import check.
+
+```bash
+source /tmp/prosperovk-harness-env.sh
+export CTS="$PWD/build/m0-cts/source"
+tools/m0 package build/m0-final-acceptance/cts --cts-title-id PPSA99744
+app=build/m0-final-acceptance/cts/title/dist/PPSA99744
+tools/m0 verify "$app"
+python3 -B tests/fixtures/m0-title/check-harness.py "$app"
+python3 -B tests/fixtures/m0-cts/check-title-capture.py "$CTS"
+```
+
+The 35-file title passed metadata, embedded identity, executable and runtime SELF inspection, exact ZIP membership and file digest checks. Clang and LLD 21.1.8 targeted x86_64-sie-ps5, with CMake 4.2.3 and Ninja 1.13.2. The manifest inventories the static link inputs and pins the CTS checkout, external sources, original case source and toolchain record. The case source SHA-256 is `d5ebeba4cbf229f3caec9c3e964753fd71a3100b26c31bad9999fb41de8141ec`. The executable declares AGC, AGCDriver, LibcInternal, SystemService, VideoOut and libkernel. The shipped libc companion matches the compute package. The license directory includes the lab and platform notices, upstream CTS and Vulkan CTS, Amber, glslang, SPIRV-Headers, SPIRV-Tools, libpng and RenderDoc notices.
+
+| Item | SHA-256 or identity |
+| --- | --- |
+| Build ID | `1b3e7351ff45de07319c00871048eb9b49ac2a1692c0a1c98277ea4274cb910d` |
+| PPSA99744.zip | `f58f3c665bdc159165e211b3c2c0c957af813cc1dfd06093344c9e90ad540bf5` |
+| build.json | `8ab8e49422a5e38a866dee0d52cb02b46cbbe03cbc5454e1afb46f2a8fd692cc` |
+| eboot.bin | `987515c553169c66894c1bf9fc4239fd224490ea6646897dfc02faac99bc1efe` |
+| sce_module/libc.prx | `e6ff45d16adf687855cc3b33b0c8a4132b6504360b221e0a34c7e99fb3ba0036` |
+
+Final verification used the existing staged Vulkan headers and loader on this host. Linux CTest passed all four checks. Both compute ZIP pairs matched their repeat builds; both titles passed package rejection tests. The QPA verifier passed 17 cases including malformed and terminated sessions. The synthetic transfer and CTS report regression also passed. The [hardware record](HARDWARE_VALIDATION.md#final-acceptance-session) keeps the PS5 outcomes separate.
+
+```bash
+source /tmp/prosperovk-harness-env.sh
+export CTS="$PWD/build/m0-cts/source"
+tools/m0 preflight
+tools/m0 linux build/m0-baseline-linux.YAzykc \
+  -DVulkan_LIBRARY=/usr/lib/x86_64-linux-gnu/libvulkan.so.1 \
+  -DVulkan_INCLUDE_DIR=/tmp/prosperovk-m0.QucJcB/toolroot/usr/include
+cmp build/m0-title-{final,repeat}/dist/PPSA99743.zip
+cmp build/m0-final-harness{,-repeat}/title/dist/PPSA99743.zip
+tools/m0 accept build/m0-title-final/dist/PPSA99743 build/m0-harness-evidence/run-000001
+tools/m0 accept build/m0-final-harness/title/dist/PPSA99743 build/m0-final-acceptance/hardened/run-000002
+python3 -B tests/fixtures/m0-title/check-harness.py build/m0-final-harness/title/dist/PPSA99743
+python3 -B tests/fixtures/m0-cts/check-qpa-verifier.py "$CTS" build/m0-baseline-cts.XA61W6/TestResults.qpa
+OPENSPEC_TELEMETRY=0 openspec validate --all --strict
+```

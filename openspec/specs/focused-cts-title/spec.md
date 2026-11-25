@@ -1,4 +1,10 @@
-## ADDED Requirements
+# focused-cts-title Specification
+
+## Purpose
+
+Validate the original focused Khronos CTS case on the identified PS5 build and retain its raw hardware result.
+
+## Requirements
 
 ### Requirement: Identified CTS deployment artifact
 
