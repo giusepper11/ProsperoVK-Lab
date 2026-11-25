@@ -7,6 +7,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import runpy
 import shutil
 import subprocess
@@ -14,8 +15,10 @@ import subprocess
 ROOT = Path(__file__).resolve().parents[1]
 TITLE = ROOT / "tests/fixtures/m0-title"
 SMOKE = ROOT / "tests/fixtures/m0-radv-compute"
+CTS = ROOT / "tests/fixtures/m0-cts"
 ID = "PPSA99743"
 NAME = "ProsperoVK Lab"
+CTS_NAME = "ProsperoVK Lab CTS"
 TEMPLATE = "91179df760df1e6c6f2d4d172bc435319d79ff3c"
 VULKAN = "7f492b4c6f67a4e8c8c67a4272cfeef22abea9cc"
 MESA = "1ba9874f478657ccf6da72ce55f0260164cc0bd0"
@@ -36,7 +39,17 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     for name in ("output", "template", "vulkan", "mesa", "sdk", "radv", "cross", "sdk_source"):
         parser.add_argument(name, type=lambda s: Path(s).resolve())
+    parser.add_argument("--cts", type=lambda s: Path(s).resolve())
+    parser.add_argument("--title-id")
     a = parser.parse_args()
+    if a.cts:
+        if not a.title_id or not re.fullmatch(r"PPSA[0-9]{5}", a.title_id) or a.title_id == ID:
+            parser.error("CTS requires a distinct PPSA title ID")
+        title_id, title_name = a.title_id, CTS_NAME
+    elif a.title_id:
+        parser.error("--title-id requires --cts")
+    else:
+        title_id, title_name = ID, NAME
     for tree, pin in [(a.template, TEMPLATE), (a.vulkan, VULKAN), (a.mesa, MESA)]:
         if subprocess.check_output(["git", "-C", tree, "rev-parse", "HEAD"], text=True).strip() != pin:
             parser.error(f"wrong revision of {tree}")
@@ -44,14 +57,18 @@ def main():
     archive = a.radv / "lib/libvulkan_radeon.ps5.a"
     if digest(archive) != RADV or (a.sdk / ".ps5-sdk-revision").read_text().strip() != SDK:
         parser.error("RADV digest or title SDK pin mismatch")
-    run("sha256sum", "--quiet", "-c", "SHA256SUMS", cwd=a.cross)
+    if not a.cts:
+        run("sha256sum", "--quiet", "-c", "SHA256SUMS", cwd=a.cross)
+    upstream = a.template / "ps5"
+    generator = runpy.run_path(str(upstream / "tools/new-title.py"))
+    if title_id in generator["TAKEN"]:
+        parser.error("title ID already reserved")
     a.output.mkdir(parents=True, exist_ok=False)
     ps5 = a.output / "ps5"
     scripts = ps5 / "tools"
     scripts.mkdir(parents=True)
     work = a.output / "work"
     work.mkdir()
-    upstream = a.template / "ps5"
     runtime = a.vulkan / "runtime/libc.prx"
     tool = a.vulkan / "build/host/ps5-native-tool"
     os.environ.update(LAB_ROOT=str(ROOT), TEMPLATE=str(a.template), MESA=str(a.mesa),
@@ -59,39 +76,61 @@ def main():
                       RADV_ARCHIVE=str(archive), PS5_PAYLOAD_SDK=str(a.sdk))
     shutil.copy2(upstream / "tools/link-title.sh", scripts)
     shutil.copy2(TITLE / "stage-notices.py", scripts)
-    generator = runpy.run_path(str(upstream / "tools/new-title.py"))
-    if ID in generator["TAKEN"]:
-        parser.error("title ID already reserved")
     meta = ps5 / "sce_sys"
     meta.mkdir()
-    param = generator["param_json"](ID, NAME, 60, 448)
+    param = generator["param_json"](title_id, title_name, 60, 448)
     param["pubtools"]["creationDate"] = "2026-11-25 00:00:00"
     (meta / "param.json").write_text(json.dumps(param, indent=2) + "\n")
-    generator["icon"](meta / "icon0.png", NAME)
+    generator["icon"](meta / "icon0.png", title_name)
     run("bash", a.vulkan / "tools/validate-assets.sh", meta)
-    inputs = [TITLE / "main.cpp", TITLE / "stage-notices.py", Path(__file__),
-              SMOKE / "compute.cpp", SMOKE / "compute.comp", SMOKE / "compute.hpp",
-              a.cross / "compute.o", a.cross / "compute.spv", upstream / "src/platform.c",
+    inputs = [TITLE / "stage-notices.py", Path(__file__), upstream / "src/platform.c",
               upstream / "src/platform.h", tool, runtime, meta / "param.json", meta / "icon0.png",
-              a.cross / "toolchain.txt", upstream / "tools/link-title.sh",
+              upstream / "tools/link-title.sh",
               *(a.sdk / "target/lib" / name for name in ("libps5platform.a", "libc++.a",
                                                           "libc++abi.a", "libunwind.a"))]
-    manifest = dict(title_id=ID, lab_revision=subprocess.check_output(
-        ["git", "-C", ROOT, "rev-parse", "HEAD"], text=True).strip(),
+    lab_head = ["git", "-C", ROOT, "rev-parse", "HEAD"]
+    manifest = dict(title_id=title_id, lab_revision=subprocess.check_output(lab_head, text=True).strip(),
         template=TEMPLATE, ps5_vulkan=VULKAN, mesa=MESA, title_sdk=SDK,
         archive_sdk="b83202be73e930050e00de0f1b4d9ec46c0391bf", radv_sha256=RADV,
-        hardware="NOT_RUN", inputs={p.name: digest(p) for p in inputs})
+        hardware="NOT_RUN")
+    if a.cts:
+        helper = CTS / "title-build.py"
+        helper_digest = digest(helper)
+        cts = runpy.run_path(str(helper))
+        lab_status = subprocess.check_output(["git", "-C", ROOT, "status", "--porcelain"])
+        provenance, cts_inputs, link_args = cts["prepare"](a.cts, a.sdk, a.radv, work)
+        if subprocess.check_output(lab_head, text=True).strip() != manifest["lab_revision"]:
+            raise ValueError("lab revision changed during CTS compilation")
+        manifest.update(workload="cts", cts=provenance,
+                        lab_worktree="dirty" if lab_status else "clean")
+        inputs += cts_inputs
+    else:
+        inputs += [TITLE / "main.cpp", SMOKE / "compute.cpp", SMOKE / "compute.comp",
+                   SMOKE / "compute.hpp", a.cross / "compute.o", a.cross / "compute.spv",
+                   a.cross / "toolchain.txt"]
+        link_args = [a.cross / "compute.o"]
+    manifest["inputs"] = {p.name: digest(p) for p in inputs}
+    if len(manifest["inputs"]) != len(inputs):
+        raise ValueError("duplicate input name in build inventory")
+    if a.cts and manifest["inputs"][helper.name] != helper_digest:
+        raise ValueError("CTS build helper changed during compilation")
     identity = hashlib.sha256(json.dumps(manifest, sort_keys=True).encode()).hexdigest()
     manifest["build_id"] = identity
     run(a.sdk / "bin/prospero-clang", "-std=c11", "-O2", "-c", upstream / "src/platform.c",
         "-o", work / "platform.o")
-    run(a.sdk / "bin/prospero-clang++", "-std=c++20", "-O2", "-DM0_RADV_COMPUTE_PS5", "-DM0_RADV_COMPUTE_TIMING",
-        f'-DM0_BUILD_ID="{identity}"', "-I", upstream / "src", "-I", SMOKE, "-I", a.radv / "include",
-        "-c", TITLE / "main.cpp", "-o", work / "title.o")
-    (work / "samples.txt").write_text("compute\n")
+    if a.cts:
+        title_object = cts["compile_entry"](a.sdk, upstream / "src", work, identity, title_id)
+    else:
+        title_object = work / "title.o"
+        run(a.sdk / "bin/prospero-clang++", "-std=c++20", "-O2", "-DM0_RADV_COMPUTE_PS5", "-DM0_RADV_COMPUTE_TIMING",
+            f'-DM0_BUILD_ID="{identity}"', "-I", upstream / "src", "-I", SMOKE, "-I", a.radv / "include",
+            "-c", TITLE / "main.cpp", "-o", title_object)
+    (work / "samples.txt").write_text("cts\n" if a.cts else "compute\n")
     run("bash", scripts / "link-title.sh", work, a.vulkan, a.sdk,
-        work / "platform.o", work / "title.o", a.cross / "compute.o")
-    app = a.output / "dist" / ID
+        work / "platform.o", title_object, *link_args)
+    app = a.output / "dist" / title_id
+    if a.cts:
+        cts["stage_notices"](a.cts, app)
     if json.loads((app / "sce_sys/param.json").read_text()) != param:
         raise ValueError("staged title metadata differs")
     run("bash", a.vulkan / "tools/validate-assets.sh", app / "sce_sys")

@@ -11,6 +11,7 @@ import runpy
 import statistics
 import subprocess
 import tempfile
+import xml.etree.ElementTree as ET
 import zipfile
 
 TOOLS = Path(__file__).resolve().parent
@@ -53,15 +54,25 @@ def inputs():
 
 
 def package(app):
-    require(app.name == ID, "title folder name")
+    title_id = app.name
+    require(re.fullmatch(r"PPSA[0-9]{5}", title_id), "title folder name")
     paths = sorted(app.rglob("*"))
     require(not app.is_symlink() and all(not p.is_symlink() for p in paths), "symlink in title")
     files = {p.relative_to(app).as_posix(): digest(p) for p in paths if p.is_file()}
     m = read_json(app / "build.json")
+    workload = m.get("workload", "compute")
+    require(workload in ("compute", "cts") and (workload == "compute") == (title_id == ID),
+            "workload or title ID mismatch")
     required = {"eboot.bin", "build.json", "sce_module/libc.prx", "sce_sys/param.json", "sce_sys/icon0.png",
                 "LEGAL.txt", "licenses/GPL-3.0.txt", "licenses/PS5_Vulkan-NOTICE.md", "licenses/Template-MIT.md",
                 "licenses/Mesa-license.rst", "licenses/Mesa/MIT", "licenses/LLVM-copyright",
                 "licenses/icon-font-copyright", "licenses/dlmalloc-SOURCE", "licenses/musl-COPYRIGHT"}
+    if workload == "cts":
+        cts = runpy.run_path(str(builder["CTS"] / "title-build.py"))
+        require(m.get("cts") == dict(revision=cts["CTS_REVISION"], case=cts["CASE_ID"],
+                                    externals=cts["EXTERNAL_PINS"]), "CTS provenance mismatch")
+        require(m.get("lab_worktree") in ("clean", "dirty"), "missing CTS worktree status")
+        required.update(f"licenses/{name}" for name in cts["NOTICE_NAMES"])
     require(required <= files.keys(), f"missing package files: {sorted(required - files.keys())}")
     zpath = app.with_suffix(".zip")
     zhash = digest(zpath)
@@ -74,27 +85,39 @@ def package(app):
     identity_fields = {k: v for k, v in m.items() if k not in ("eboot_sha256", "files_sha256", "build_id")}
     identity = hashlib.sha256(json.dumps(identity_fields, sort_keys=True).encode()).hexdigest()
     require(identity == m["build_id"], "build identity mismatch")
-    require(m["title_id"] == ID and m["archive_sdk"] == ARCHIVE_SDK and
+    require(m["title_id"] == title_id and m["archive_sdk"] == ARCHIVE_SDK and
             all(m[k] == v for k, v in PINS.items()), "dependency or title pin mismatch")
-    required_inputs = ("main.cpp", "stage-notices.py", "build-m0-title.py", "compute.cpp", "compute.comp",
-                       "compute.hpp", "compute.o", "compute.spv", "platform.c", "platform.h",
-                       "ps5-native-tool", "libc.prx", "param.json", "icon0.png", "toolchain.txt",
+    required_inputs = ("stage-notices.py", "build-m0-title.py", "platform.c", "platform.h",
+                       "ps5-native-tool", "libc.prx", "param.json", "icon0.png",
                        "link-title.sh", "libps5platform.a", "libc++.a", "libc++abi.a", "libunwind.a")
+    if workload == "cts":
+        archive_list = builder["CTS"] / "focused-archives.txt"
+        required_inputs += (
+            "title-build.py", "title.cpp", "configure-ps5.sh", "focused-archives.txt",
+            "headless-platform.cpp", "headless-resolver.cpp", "focused-package.cpp",
+            "compile-focused.py", "tcuMain.cpp", "cts-runner.o", "focused-package.cpp.o",
+            "cts-toolchain.txt", "vktComputeBasicComputeShaderTests.cpp", "vktComputeBasicComputeShaderTests.hpp",
+            *(Path(name).name for name in archive_list.read_text().splitlines()),
+        )
+    else:
+        required_inputs += ("main.cpp", "compute.cpp", "compute.comp", "compute.hpp",
+                            "compute.o", "compute.spv", "toolchain.txt")
     require(re.fullmatch(r"[0-9a-f]{40}", m["lab_revision"]) and
-            all(re.fullmatch(r"[0-9a-f]{64}", m["inputs"][k]) for k in required_inputs),
+            set(required_inputs) <= m["inputs"].keys() and
+            all(re.fullmatch(r"[0-9a-f]{64}", value) for value in m["inputs"].values()),
             "incomplete source or toolchain identity")
     param = read_json(app / "sce_sys/param.json")
-    require(param["titleId"] == ID and param["conceptId"] == ID[4:] and
-            param["localizedParameters"]["en-US"]["titleName"] == builder["NAME"] and
-            param["contentId"].startswith(f"UP9000-{ID}_00-"), "title metadata")
+    require(param["titleId"] == title_id and param["conceptId"] == title_id[4:] and
+            param["localizedParameters"]["en-US"]["titleName"] == builder["CTS_NAME" if workload == "cts" else "NAME"] and
+            param["contentId"].startswith(f"UP9000-{title_id}_00-"), "title metadata")
     require(files["eboot.bin"] == m["eboot_sha256"], "executable digest")
     for name in ("sce_sys/icon0.png", "sce_sys/param.json", "sce_module/libc.prx"):
         require(files[name] == m["inputs"][Path(name).name], f"input mismatch: {name}")
     with zipfile.ZipFile(zpath) as z:
-        expected = {ID + "/", *(ID + "/" + p.relative_to(app).as_posix() + ("/" if p.is_dir() else "") for p in paths)}
+        expected = {title_id + "/", *(title_id + "/" + p.relative_to(app).as_posix() + ("/" if p.is_dir() else "") for p in paths)}
         require(len(z.infolist()) == len(expected) and set(z.namelist()) == expected, "ZIP inventory")
         for name, value in files.items():
-            require(hashlib.sha256(z.read(f"{ID}/{name}")).hexdigest() == value, f"ZIP differs: {name}")
+            require(hashlib.sha256(z.read(f"{title_id}/{name}")).hexdigest() == value, f"ZIP differs: {name}")
     vulkan = Path(os.environ["VULKAN"])
     native = vulkan / "build/host/ps5-native-tool"
     require(digest(native) == m["inputs"]["ps5-native-tool"], "native tool mismatch")
@@ -106,8 +129,12 @@ def package(app):
         elf = Path(tmp) / "extracted.elf"
         subprocess.run([native, "self", "--extract", "--file", app / "eboot.bin", "--out", elf],
                        stdout=subprocess.DEVNULL, check=True)
-        require(identity.encode() in elf.read_bytes(), "executable lacks manifest build ID")
-    return dict(BUILD="PASS", PACKAGE="PASS", build_id=identity, zip_sha256=zhash)
+        payload = elf.read_bytes()
+        require(identity.encode() in payload, "executable lacks manifest build ID")
+        if workload == "cts":
+            require(all(marker.encode() in payload for marker in (title_id, cts["CASE_ID"])),
+                    "executable lacks CTS title ID or case")
+    return dict(BUILD="PASS", PACKAGE="PASS", build_id=identity, zip_sha256=zhash, workload=workload)
 
 
 def run_report(run, identity):
@@ -166,9 +193,16 @@ if __name__ == "__main__":
             out.update(DEPLOY="UNVERIFIED", EXECUTE="NOT_RUN", CORRECTNESS="NOT_RUN",
                        PERFORMANCE="NOT_RUN", SHELL_EXIT="NOT_RUN")
             if args.cmd == "run":
-                out.update(run_report(args.run, out["build_id"]))
+                if out["workload"] == "cts":
+                    report = runpy.run_path(str(TOOLS / "m0-cts-report.py"))["cts_run_report"]
+                    out.update(report(args.run, args.app, out["build_id"]))
+                else:
+                    out.update(run_report(args.run, out["build_id"]))
             print(json.dumps(out, indent=2))
-            if args.cmd == "run" and (out["CORRECTNESS"], out["PERFORMANCE"]) != ("PASS", "PASS"):
-                raise SystemExit(1)
-    except (OSError, ValueError, KeyError, TypeError, IndexError, subprocess.CalledProcessError, zipfile.BadZipFile) as error:
+            if args.cmd == "run":
+                expected_performance = "NOT_RUN" if out["workload"] == "cts" else "PASS"
+                if (out["EXECUTE"], out["CORRECTNESS"], out["PERFORMANCE"]) != ("PASS", "PASS", expected_performance):
+                    raise SystemExit(1)
+    except (OSError, ValueError, KeyError, TypeError, IndexError, subprocess.CalledProcessError,
+            zipfile.BadZipFile, ET.ParseError) as error:
         parser.exit(2, f"Validation failed: {error}\n")

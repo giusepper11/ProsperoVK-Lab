@@ -35,7 +35,14 @@ with TemporaryDirectory() as tmp:
         rejects(accept["package"], app)
         shutil.copy2(original / name, app / name)
     manifest = json.loads((app / "build.json").read_text())
-    for key in ("title_id", "build_id", "eboot_sha256", "mesa"):
+    keys = ["title_id", "build_id", "eboot_sha256", "mesa", "workload"]
+    if manifest.get("workload") == "cts":
+        keys.append("cts")
+        for notice in (app / "licenses").glob("CTS-*"):
+            notice.unlink()
+            rejects(accept["package"], app)
+            shutil.copy2(original / "licenses" / notice.name, notice)
+    for key in keys:
         (app / "build.json").write_text(json.dumps(dict(manifest, **{key: "bad"})))
         rejects(accept["package"], app)
     shutil.copy2(original / "build.json", app)

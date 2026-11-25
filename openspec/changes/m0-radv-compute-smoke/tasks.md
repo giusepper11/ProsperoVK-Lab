@@ -21,9 +21,9 @@
 
 ## 3. Console evidence
 
-- [ ] 3.1 Obtain a verified final title build and supported launch and result-capture path. Run once on the identified Slim with firmware 13.60 and record the evidence required by the hardware runbook.
+- [x] 3.1 Obtain a verified final title build and supported launch and result-capture path. Run once on the identified Slim with firmware 13.60 and record the evidence required by the hardware runbook.
 
-Run-000001 satisfies the standalone execution, correctness, CPU timing and result-capture portions of 3.1. Normal shell exit remains unconfirmed.
+Run-000001 established the original baseline. Hardened run-000002 verified the deployed build, exact compute verdict, CPU timings, visible notification and automatic shell exit. See the [hardware record](../../../docs/HARDWARE_VALIDATION.md#hardened-compute-result).
 
 ## Workflow follow-up
 

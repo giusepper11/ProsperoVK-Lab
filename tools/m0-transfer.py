@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 import re
 import runpy
+from urllib.error import URLError
 from urllib.parse import urlencode
 from urllib.request import ProxyHandler, Request, build_opener
 from uuid import uuid4
@@ -15,7 +16,6 @@ from uuid import uuid4
 accept = runpy.run_path(str(Path(__file__).with_name("m0-accept.py")))
 ID = accept["ID"]
 PARENT = "/data/homebrew"
-DEST = PARENT + "/" + ID
 
 
 class Manager:
@@ -60,15 +60,15 @@ def compare(manager, app, dest):
                 raise ValueError(f"readback mismatch: {file.name}")
 
 
-def check_free(manager):
-    if ID in json.dumps(manager.request("titles")["titles"]) or any(
-            e["name"].casefold() == ID.casefold() for e in manager.entries(PARENT)):
+def check_free(manager, title_id):
+    if title_id.casefold() in json.dumps(manager.request("titles")["titles"]).casefold() or any(
+            e["name"].casefold() == title_id.casefold() for e in manager.entries(PARENT)):
         raise ValueError("title ID or destination already in use")
 
 
 def deploy(manager, app):
     accept["package"](app)
-    check_free(manager)
+    check_free(manager, app.name)
     stage = f"{PARENT}/.prosperovk-{uuid4().hex}"
     manager.request("ftp/mkdir", data={"path": stage})
     print("Staging directory", stage, flush=True)
@@ -79,25 +79,41 @@ def deploy(manager, app):
         else:
             manager.request("ftp/upload", {"path": remote}, file.read_bytes())
     compare(manager, app, stage)
-    check_free(manager)
-    manager.request("ftp/rename", data={"from": stage, "to": DEST})
-    compare(manager, app, DEST)
-    print("DEPLOY PASS", DEST)
+    check_free(manager, app.name)
+    dest = f"{PARENT}/{app.name}"
+    manager.request("ftp/rename", data={"from": stage, "to": dest})
+    compare(manager, app, dest)
+    print("DEPLOY PASS", dest)
 
 
-def retrieve(manager, name, out):
+def retrieve(manager, name, out, app=None):
     if not re.fullmatch(r"run-[0-9]{6}", name):
         raise ValueError("expected run-NNNNNN")
-    remote = f"{DEST}/{name}"
+    title_id = ID
+    if app is not None:
+        accept["package"](app)
+        title_id = app.name
+    remote = f"{PARENT}/{title_id}/{name}"
     entries = {e["name"] for e in manager.entries(remote) if not e["is_dir"]}
     out.mkdir(parents=True, exist_ok=False)
-    for file in ("start.log", "result.json", "exit-code.txt", "timing.json", "timing-exit-code.txt"):
+    artifacts = (("result.json", "timing.json", "timing-exit-code.txt") if title_id == ID
+                 else ("TestResults.qpa", "title.log"))
+    for file in ("start.log", "exit-code.txt", *artifacts):
         if file in entries:
             (out / file).write_bytes(manager.download(f"{remote}/{file}"))
-    log = manager.request("klogs")
-    lines = [str(line) for line in log["lines"] if ID in str(line) or "ProsperoVK Lab" in str(line)]
-    (out / "title-klog.log").write_text("".join(s + "\n" for s in lines))
-    print(f"Retrieved {name} to {out}. Kernel log connected={log.get('connected')}, title lines={len(lines)}")
+    capture = {"title_id": title_id, "run": name}
+    title_name = "ProsperoVK Lab" if title_id == ID else "ProsperoVK Lab CTS"
+    for route, filename in (("klogs", "title-klog.log"), ("logs", "manager-title.log")):
+        try:
+            log = manager.request(route)
+            lines = [str(line) for line in log["lines"] if title_id in str(line)
+                     or (title_name in str(line) and (title_id != ID or "ProsperoVK Lab CTS" not in str(line)))]
+            (out / filename).write_text("".join(s + "\n" for s in lines))
+            capture[route] = dict(connected=log.get("connected"), matched_lines=len(lines))
+        except (URLError, TimeoutError, ValueError, KeyError) as error:
+            capture[route] = dict(error=type(error).__name__)
+    (out / "retrieval.json").write_text(json.dumps(capture, indent=2) + "\n")
+    print(f"Retrieved {remote} to {out}. Log status in retrieval.json.")
 
 
 if __name__ == "__main__":
@@ -111,13 +127,15 @@ if __name__ == "__main__":
     command.add_argument("host")
     command.add_argument("run")
     command.add_argument("out", type=Path)
+    command.add_argument("--app", type=Path, help="verified local title folder (required for CTS)")
     args = parser.parse_args()
     manager = Manager(args.host)
     if args.cmd == "deploy":
         deploy(manager, args.app)
     elif args.cmd == "readback":
         accept["package"](args.app)
-        compare(manager, args.app, DEST)
-        print("DEPLOY PASS", DEST)
+        dest = f"{PARENT}/{args.app.name}"
+        compare(manager, args.app, dest)
+        print("DEPLOY PASS", dest)
     else:
-        retrieve(manager, args.run, args.out)
+        retrieve(manager, args.run, args.out, args.app)

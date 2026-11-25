@@ -1,6 +1,6 @@
 # Hardware validation
 
-M0 target: PS5 Slim, firmware 13.60, with an operator-provided authorized environment. The operator confirmed the Slim model, and Prospero Manager reported the firmware. The standalone hardware smoke and CPU timing capture passed. CTS execution and shell-exit evidence remain open. [Verified baseline](#first-verified-slim-baseline). The [upstream audit](UPSTREAM.md) identifies external console runs on other configurations. [Toolchain evidence](M0_TOOLCHAIN.md) records the local target compilation, archive build and link checks.
+M0 target: PS5 Slim, firmware 13.60, with an operator-provided authorized environment. The operator confirmed the Slim model, and Prospero Manager reported the firmware. The standalone hardware smoke and CPU timing capture passed. The hardened compute title also completed and returned to the shell. CTS requires its own hardware evidence. [Verified baseline](#first-verified-slim-baseline). The [upstream audit](UPSTREAM.md) identifies external console runs on other configurations. [Toolchain evidence](M0_TOOLCHAIN.md) records the local target compilation, archive build and link checks.
 
 ## Runbook
 1. Verify platform adapter, public toolchain, binary hash, driver revision, deployment method and documented recovery procedure on the actual device.
@@ -101,3 +101,23 @@ Pinned PS5_Mesa `1ba9874f478657ccf6da72ce55f0260164cc0bd0`, release RADV archive
 | Submission to observed completion | 24.617 | 30.872 |
 
 The probe did not measure Vulkan timestamps. GPU duration is null; GPU timestamp support remains untested. This single run establishes a baseline for this build and workload. Raw report SHA-256 values are `6b4fc0ce65d80a9302781e6f37db0d2add2fa31cb7d1b4e069fac3792985bb2c` (smoke), `b1df15d1b265c8b1bc2181ab2a1aa3df3c56d27a8a20724e0eff892e8381a7da` (timing), `5c14906f0a02ebab39a9ad5b652da67721636c0cfefc421db9ce8e95513dc83b` (journal), and `9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa` (each return code). See [harness commands](HARNESS.md#transfer-and-evidence) for verification.
+
+## Final acceptance session
+
+On 2026-11-25 the Manager reported firmware 13.60. Before transfer, PPSA99744 was absent from both the catalog and the homebrew directory. PPSA99743 was present in both. A fresh readback of the original installation matched its verified package. The Manager kernel log returned disconnected with zero lines. The ordinary log contained 107 entries and no kernel-log connection diagnostic. The Manager UI describes its kernel feed as a client of a running klogsrv. The available log interface exposes list and clear operations. This check could not distinguish an absent producer from a disconnected client. Shell exit therefore needs an independent operator observation or shell event for each title.
+
+With separate operator approval for replacement and execution, the host verified all 30 files in the original installation, including the five run artifacts, and saved a complete local and console backup. The transfer staged the exact hardened package, copied the existing run directory forward, verified the staged files, moved the original folder to the backup and verified published files at PPSA99743. The local copy is `build/m0-final-acceptance/original-installation/`; the console backup path is recorded locally in `build/m0-final-acceptance/replacement.json`.
+
+### Hardened compute result
+
+PPSA99743, lab revision `163910f24a9c139fd76815be93e802a26a2ec65c`, build ID `da688570b93fec17a9dd851173c9cdfb883aa3f1a64629e971609c88391d1902`, ZIP SHA-256 `913d6ebd6b828c8a550c52b6fa3bceaf4650aa132cdb9f7ab91e3f0694b54c31`. The operator launched **ProsperoVK Lab** once. The host retrieved `run-000002` from the verified installation.
+
+| Gate | Evidence |
+| --- | --- |
+| BUILD / PACKAGE | PASS. Both preserved hardened packages passed structural inspection and matched byte for byte. |
+| DEPLOY | PASS. Readback matched the published folder. |
+| EXECUTE / CORRECTNESS | PASS. The journal matches the build. All 4,096 words passed and both workload return codes were zero. |
+| PERFORMANCE | PASS for CPU capture. Five warm-ups, 30 measured samples. Median / p95 in nanoseconds were 15,196 / 17,160 for submission, 8,700 / 10,024 for fence wait and 24,937.5 / 28,145 for submission to observed completion. GPU duration remains unmeasured. |
+| SHELL_EXIT | PASS by operator observation. A notification was visible too briefly to transcribe. The home screen returned automatically within 60 seconds without a crash dialog or manual close. Both title-filtered Manager logs were empty. |
+
+Local evidence is in `build/m0-final-acceptance/hardened/run-000002/`. Journal SHA-256 `4cbebf8a6506f0c647c41abe3e8c783e9ea8fe1830baf8422c6c04e8a3e553c0`, result `6b4fc0ce65d80a9302781e6f37db0d2add2fa31cb7d1b4e069fac3792985bb2c`, timing `a252638ce96a3e88c783ceec7f0b5b8a27ed28411cec247a74b408558392fb8d`. Both return-code hashes match the original baseline. The original run retains its own shell-exit status.

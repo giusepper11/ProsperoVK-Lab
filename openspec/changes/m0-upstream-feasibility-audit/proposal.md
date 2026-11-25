@@ -12,8 +12,10 @@ The lab needs reproducible evidence for its driver, test reuse, build strategy, 
 
 ## Capabilities
 
-This feasibility change has no product capability deltas.
+The focused-cts-title delta covers the identified deployment artifact and single-case hardware evidence.
 
 ## Impact
 
 The change affects audit and runbook documentation, OpenSpec configuration, a Linux verification fixture and a host-side QPA verifier. The M0 exit gate includes console feasibility and the maintainer's license decision.
+
+Package the local focused CTS adapter through the existing M0 harness and bind its original QPA to a fresh run and identified title. Use the selected Khronos case for the Slim acceptance gate.

@@ -25,4 +25,4 @@
 - [x] 2.6 Verify read-only management access and record reported firmware, model label and CTS title lookup in `docs/HARDWARE_VALIDATION.md`.
 - [x] 2.7 Record the operator's confirmation of the PS5 Slim model alongside the dashboard firmware evidence.
 
-Run-000001 verifies standalone title startup, transfer and compute capture. Tasks 2.1–2.2 still require the selected CTS case and its original QPA. Shell exit remains unconfirmed. [Hardware baseline](../../../docs/HARDWARE_VALIDATION.md#first-verified-slim-baseline).
+Run-000001 verifies standalone title startup, transfer and compute capture. Tasks 2.1–2.2 still require the selected CTS case and its original QPA. The operator confirmed normal shell exit for hardened compute run-000002. [Hardware baseline](../../../docs/HARDWARE_VALIDATION.md#first-verified-slim-baseline).

@@ -50,3 +50,25 @@ Retrieve writes to a new directory and preserves incomplete captures. It saves a
 **Observed.** At published commit `468a64b`, the standalone change had explicit deliverables for the pre-packaging link and review ZIP. The review scenario left title ID and packaging unassigned. The deployable builder, title adapter and runtime notice hook were still outside version control after the console run. The retained failed build directories and session output identify two actual failures: the selected Python environment lacked usable Pillow for icon generation, and an extra raw-ELF comparison rejected the signer's omission of a trailing note. Upstream SELF inspection and digest verification accepted the generated modules. Two original package passes produced identical ZIPs. Commit `848cd1f` preserves the successful implementation, including the adapter hashed by the deployed manifest.
 
 **Inference.** An acceptance workflow ending at the review ZIP allowed useful intermediate work to be reported as the final deliverable. Paths into an earlier session's dependency caches and a separate cross-build made reconstruction harder. The current package entry point starts at the shader and workload source and finishes after folder, manifest, embedded identity and ZIP validation.
+
+## Focused CTS title
+
+Set `CTS` to the clean Khronos checkout at `f6a29701220f34dd1407513bfe80d74ca7b392ce`, with its pinned external sources staged as in the [CTS build procedure](M0_TOOLCHAIN.md#link-the-focused-cts-executable-for-ps5). The package command builds the upstream runner, focused registrar and unmodified basic compute test factory from source. Use a distinct title ID checked against the connected target. The build includes the original shader through the CTS factory.
+
+```bash
+export CTS="$PWD/build/m0-cts/source"
+tools/m0 package build/cts-title --cts-title-id PPSA99744
+app=build/cts-title/title/dist/PPSA99744
+tools/m0 verify "$app"
+python3 -B tests/fixtures/m0-title/check-harness.py "$app"
+python3 -B tests/fixtures/m0-cts/check-title-capture.py "$CTS"
+```
+
+After deployment authorization, use `tools/m0 deploy "$app" "$PS5_HOST"`. It rechecks both the title catalog and the destination. Once readback passes, the operator can launch **ProsperoVK Lab CTS** once with separate execution authorization. Record whether the shell resumes by itself, any error, and the time of observation. Stop after a suspected hang, device loss or the 60-second observation deadline.
+
+```bash
+tools/m0 retrieve "$PS5_HOST" run-000001 build/cts-evidence/run-000001 --app "$app"
+tools/m0 accept "$app" build/cts-evidence/run-000001
+```
+
+Use the actual new run number in both paths. The title journals the title, build and case, saves the upstream QPA and runner diagnostics in the fresh directory and records the return from the runner. Retrieval preserves available files even for an incomplete run. The retrieval receipt identifies the source run and records the availability of the title-filtered Manager and kernel logs. The QPA verifier checks the session and case framing, XML verdict, CTS release, Slim vendor and capture path. It retains the original QPA digest and verdict. Record observed shell behavior separately.

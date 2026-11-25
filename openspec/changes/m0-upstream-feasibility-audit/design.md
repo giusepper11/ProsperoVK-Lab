@@ -17,3 +17,5 @@ The initial project contains an architecture and acceptance criteria. M0 needs s
 - The reported PS5 CTS fork could not be resolved. Preserve the published test mechanism, and require an exact port and build manifest before using a run as local hardware evidence.
 - GPU access, SDK linkage and firmware 13.60 compatibility remain open. Use the existing hardware runbook and the single-case profile to establish those gates.
 - Keep this change active until the required console evidence and combined-title inputs are reviewed.
+
+Use a separate title identity for CTS. Verify availability in both the target title catalog and destination before staging. Retain the upstream runner's QPA writer and case filter. Keep the QPA, title journal and CTS return code in the same fresh run directory. The host verifies all three after retrieval. Normal shell exit requires an independent observation after the workload returns. Preserve the hardware-tested compute installation pending operator approval.
