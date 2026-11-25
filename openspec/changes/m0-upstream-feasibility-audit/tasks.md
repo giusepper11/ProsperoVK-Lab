@@ -12,6 +12,8 @@
 - [x] 1.8 Verify PS5-target relocatable linkage of the CTS resolver reference and SDK allocation wrappers. Compare whole and selective RADV archive extraction and record the observed definitions and unresolved import count in `docs/M0_TOOLCHAIN.md`.
 - [x] 1.9 Attempt the pinned CTS console configuration, compare the staged SDK exports against RADV's graphics imports and assess the public focused CTS port against the selected case and driver. Record the results in the toolchain evidence and upstream audit.
 - [x] 1.10 Verify single-case QPA framing and identity around the pinned upstream parser. Exercise the verifier on the Linux CTS result, incomplete reports, contradictory case IDs and terminated or failing cases. [Linux evidence](../../../docs/M0_TOOLCHAIN.md#reproduce-the-single-cts-smoke-on-linux).
+- [x] 1.11 Build a local headless adapter and compile the unchanged selected Khronos CTS workload for the PS5 target. Exercise the same adapter and case in the Linux CTS harness and record exactly which PS5 build and execution steps pass. [Local headless evidence](../../../docs/M0_TOOLCHAIN.md#build-the-local-cts-headless-adapter).
+- [x] 1.12 Link a focused PS5-target CTS ELF using the upstream basic compute case factory. Verify reproducible linkage and confirm the focused registrar preserves the exact case and QPA result on Linux. [Link and run evidence](../../../docs/M0_TOOLCHAIN.md#link-the-focused-cts-executable-for-ps5).
 
 ## 2. Target and maintainer gates
 

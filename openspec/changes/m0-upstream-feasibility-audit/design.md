@@ -10,6 +10,7 @@ The initial project contains an architecture and acceptance criteria. M0 needs s
 - Exercise the selected PS5 smoke case first on Linux with the pinned, unmodified upstream CTS runner. Use the upstream QPA parser for the status and detail. Require one ordered session and one matching case in the raw QPA and confirm the XML case identity. Retain the raw log and digest. Record a terminated case as terminated even if its status text says Pass. Record Linux execution as software-ICD evidence.
 - Compile the fixture as a PS5-target object against public SDK headers. An actual launch gate requires a verified title and a matching Slim environment. Use one authorized external CTS case for that gate if the build can be identified and its artifacts retrieved.
 - Verify the CTS resolver reference and archive selection through a relocatable link against the pinned RADV and SDK libraries. Record unresolved imports and keep final title linkage as a target gate.
+- Use the stock CTS headless CMake entry point and its platform source override to exercise a local headless adapter. Point CTS's Vulkan entry point at the Linux loader on the host and at the linked RADV ICD for PS5. Keep CTS's application runner, basic compute case factory, memory defaults and QPA writer. Use a focused registration for the native link and select the original case through the CTS case filter. Verify that focused build on Linux. Treat target objects and link artifacts as build-host evidence until a supported title can launch.
 
 ## Risks and verification
 

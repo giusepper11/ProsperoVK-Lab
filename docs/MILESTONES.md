@@ -24,7 +24,11 @@ M0 is in progress. M1–M7 are planned. Each milestone must have an OpenSpec cha
 
 The [M0 OpenSpec change](../openspec/changes/m0-upstream-feasibility-audit/proposal.md) remains active. Hardware validation is blocked pending an authorized title package, its build manifest and a verified launch and artifact retrieval path for the Slim on firmware 13.60.
 
-The standalone RADV compute check passed on Linux llvmpipe. The PS5-target relocatable and pre-packaging ELF linked reproducibly on the build host. The final title and hardware execution remain pending. [Standalone change](../openspec/changes/m0-radv-compute-smoke/proposal.md), [standalone evidence](M0_TOOLCHAIN.md#standalone-radv-compute).
+The original Khronos CTS case passed on Linux with the local headless adapter. The focused PS5-target CTS ELF and the standalone RADV smoke ELF linked reproducibly on the build host. The final title and hardware execution remain pending. [Local CTS build](M0_TOOLCHAIN.md#link-the-focused-cts-executable-for-ps5), [standalone evidence](M0_TOOLCHAIN.md#standalone-radv-compute).
+
+The standalone compute timing probe verified raw host samples, accuracy checks and optional detailed logs in Linux. The same probe produces a reproducible PS5-target ELF with recorded clock and logging imports. The portable runner, GPU timing and PS5 baseline retain their milestone gates. [Linux timing evidence](M0_TOOLCHAIN.md#run-the-homebrew-timing-probe-on-linux), [PS5 build evidence](M0_TOOLCHAIN.md#cross-build-the-homebrew-timing-probe-for-ps5).
+
+The reproducible title review archives cover both the PS5 smoke and timing ELFs with their build, dependency and capture records. The installable title remains an open gate. [Smoke archive](M0_TOOLCHAIN.md#stage-the-title-review-archive), [timing archive](M0_TOOLCHAIN.md#export-the-timing-review-zip).
 
 Exit: reproducible audit, pinned dependency plan, host build feasibility and console smoke evidence or explicit blocked hardware gate. Do not close M0 until required console feasibility is demonstrated or maintainer changes scope.
 

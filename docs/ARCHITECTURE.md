@@ -50,6 +50,14 @@ Discover device properties and advertised extensions/features/limits; distinguis
 
 The proposed test statuses are PASS, FAIL, UNSUPPORTED, ERROR, TIMEOUT, NOT_RUN. A correctness failure invalidates performance evidence. Unsupported must include a precise unmet requirement; an advertised feature that fails a valid workload is not unsupported.
 
+## Standalone homebrew app
+
+The lab app runs the selected offscreen benchmark on the console and saves a machine-readable report. The initial CLI and a later console UI use the same runner. The operator selects a workload, starts the run, sees its outcome and can enable detailed logs. The result remains available with logging disabled. Selected upstream CTS cases provide separate conformance and diagnostic evidence.
+
+The runner records workload settings, exact correctness, raw timing samples and the device, firmware, build and driver revisions needed to reproduce a run. It records distinct CPU timing and GPU timestamps where measured, along with workload-specific throughput. Device counters and thermal data require a verified source. The report records why a requested metric is unavailable. Detailed logs include run and case identifiers and lifecycle events. Keep per-iteration log I/O outside timed intervals and record the logging configuration for comparisons.
+
+Use the same console, firmware, workload, build mode and measurement path when evaluating a change to Mihawk's RADV. The lab captures evidence. A host tool checks report compatibility and compares repeated runs. The console adapter delivers reports and logs through the verified title environment. Package and launch choices remain part of the [hardware gate](HARDWARE_VALIDATION.md#m0-operator-smoke).
+
 ## Portability
 Linux establishes functional reference and runner CI. Compare correctness across devices, but performance regression gates require comparable hardware/configuration. Software Vulkan is a functional smoke target, not a PS5 performance baseline. Do not assume PS5 WSI, dynamic loading, debug callbacks, GPU timestamps, asynchronous queues or performance counters; probe availability and document alternatives. Offscreen workloads must not require a swapchain.
 

@@ -10,6 +10,9 @@ The documented PS5 CTS fork is unavailable. The public RADV smoke source provide
 - Exercise the same shader and integer reference on Linux, and check PS5-target compilation and static RADV linkage on the build host.
 - Record the actual static archive participation and runtime library declarations of the pre-packaging ELF for the M0 source and notice review.
 - Verify the captured start marker, result and exit code on the host using the same contract for local and console runs.
+- Exercise a Linux timing probe built from the same workload to verify correctness-first sample capture and optional diagnostic logging for the planned homebrew app.
+- Cross-build the shared timing probe as an opt-in PS5 ELF and inspect its runtime imports before title integration.
+- Assemble a reproducible local title review archive from the verified PS5 link outputs, with the build identity, declared runtime dependencies and capture contract needed to review packaging.
 - Document the evidence required to run that fixture on the connected firmware 13.60 console through a verified title environment.
 
 ## Capabilities

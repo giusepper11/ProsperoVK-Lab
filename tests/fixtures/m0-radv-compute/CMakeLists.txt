@@ -98,12 +98,25 @@ add_custom_command(
     VERBATIM
 )
 
-add_executable(m0_radv_compute main.cpp compute.cpp "${shader_header}")
-target_compile_features(m0_radv_compute PRIVATE cxx_std_20)
-target_include_directories(m0_radv_compute PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
-target_link_libraries(m0_radv_compute PRIVATE Vulkan::Vulkan)
+add_library(m0_radv_compute_workload STATIC compute.cpp "${shader_header}")
+target_compile_features(m0_radv_compute_workload PUBLIC cxx_std_20)
+target_include_directories(m0_radv_compute_workload PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
+target_link_libraries(m0_radv_compute_workload PUBLIC Vulkan::Vulkan)
 
-enable_testing()
+add_executable(m0_radv_compute main.cpp)
+target_link_libraries(m0_radv_compute PRIVATE m0_radv_compute_workload)
+
+add_executable(m0_radv_compute_timing timing-main.cpp)
+target_link_libraries(m0_radv_compute_timing PRIVATE m0_radv_compute_workload)
+
+include(CTest)
+if(NOT BUILD_TESTING)
+    return()
+endif()
+
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+add_executable(m0_radv_timing_injected timing-injected.cpp)
+target_link_libraries(m0_radv_timing_injected PRIVATE m0_radv_compute_workload)
 add_test(
     NAME m0_radv_compute
     COMMAND "${CMAKE_COMMAND}" "-DSMOKE_EXECUTABLE=$<TARGET_FILE:m0_radv_compute>"
@@ -116,3 +129,9 @@ add_test(
             -P "${CMAKE_CURRENT_LIST_FILE}"
 )
 set_tests_properties(m0_radv_compute m0_radv_compute_missing_icd PROPERTIES TIMEOUT 20)
+add_test(
+    NAME m0_radv_compute_timing
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/check-timing.py"
+            "$<TARGET_FILE:m0_radv_compute_timing>" "$<TARGET_FILE:m0_radv_timing_injected>"
+)
+set_tests_properties(m0_radv_compute_timing PROPERTIES TIMEOUT 30)

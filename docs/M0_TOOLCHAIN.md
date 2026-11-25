@@ -329,6 +329,84 @@ LC_ALL=C comm -23 "$audit/required-agc.txt" "$audit/exports-agc.txt"
 
 This found five missing definitions in the staged libraries. They were `sceAgcDriverSetHsOffchipParam`, `sceAgcDriverSetTFRing`, `sceAgcDriverSubmitDcb`, `sceAgcInit` and `sceAgcSuspendPoint`. The check establishes which link inputs are absent locally. Availability of those APIs through a verified title environment remains open. The [upstream audit](UPSTREAM.md#cts-execution-and-report-ingestion) records the console fork and the separately pinned focused CTS port.
 
+### Build the local CTS headless adapter
+
+This build uses the official Khronos CTS at `f6a29701220f34dd1407513bfe80d74ca7b392ce`. The lab supplies only the platform adapter and Vulkan resolver. The upstream runner, test registration, shader, result comparison and QPA writer stay in the build. The selected case checks 256 values. CMake's `TCUTIL_PLATFORM_SRCS` selects the lab adapter. The Linux build uses the system Vulkan loader. The PS5-target build refers to the public RADV ICD entry point. [Adapter](../tests/fixtures/m0-cts/headless-platform.cpp), [resolver](../tests/fixtures/m0-cts/headless-resolver.cpp).
+
+From the lab root, use `cts_root`, `build_root` and `probe_tools` from the earlier setup. These identify the pinned Linux CTS build, the staged SDK and RADV release, and the host headers and tools.
+
+```bash
+set -eu
+lab_root="$PWD"
+cts_source=$(realpath "$cts_root/source")
+cts_build=$(realpath "$cts_root/compiled")
+sdk="$build_root/PS5_Vulkan/.deps/native/ps5-payload-sdk"
+radv="$build_root/PS5_Vulkan/.deps/native/radv-release"
+capture=$(mktemp -d "$cts_root/local-build.XXXXXX")
+fixture=tests/fixtures/m0-cts
+bash "$fixture/build-ps5-objects.sh" "$capture/ps5-target" "$cts_source" "$sdk" "$radv"
+python3 -B "$fixture/relink-linux.py" "$cts_build" "$capture/linux" \
+  "$probe_tools/include" /usr/lib/x86_64-linux-gnu/libvulkan.so.1
+(
+  cd "$capture/linux"
+  status=0
+  VK_DRIVER_FILES=/usr/share/vulkan/icd.d/lvp_icd.json MESA_SHADER_CACHE_DISABLE=true \
+    timeout --foreground 60s ./deqp-vk-local-headless \
+    --deqp-case=dEQP-VK.compute.pipeline.basic.copy_ssbo_single_invocation \
+    --deqp-log-filename=TestResults.qpa --deqp-archive-dir="$cts_build/external/vulkancts/modules/vulkan" \
+    --deqp-log-flush=disable --deqp-log-images=disable --deqp-shadercache=disable > stdout.log 2>&1 || status=$?
+  printf '%s\n' "$status" > exit-code.txt
+  test "$status" -eq 0
+  python3 -B "$lab_root/tools/verify-m0-cts-qpa.py" "$cts_source" TestResults.qpa > qpa-result.json
+  sha256sum headless-platform.o headless-resolver.o deqp-vk-local-headless TestResults.qpa \
+    stdout.log qpa-result.json exit-code.txt compile-command.txt link-command.txt > SHA256SUMS
+  sha256sum --quiet --strict -c SHA256SUMS
+)
+```
+
+The Linux command replaces the stock platform archive in the existing CTS Ninja link recipe, then links the two adapter objects with the Linux loader. The new executable ran the selected case on llvmpipe, returned exit 0 and wrote a complete QPA with `Pass (Compute succeeded)`. The QPA SHA-256 was `86c8359edb38822d34fc1a58779b6b1e53bab64d4f5292452d07614b13b18122`. An invocation with an explicit, alternate Vulkan library path reached the adapter's error and produced no accepted case.
+
+The PS5 command builds the unmodified CTS entry point and selected compute source plus both adapter objects as x86-64 ELF relocatables. It records the compiler commands, symbol checks and hashes. The test object contains the official case registration and matches the independent compile at SHA-256 `7f4954970a1a20002dad97d84f29376804ecee83692d9c96b21b2f595967258e`. The SDK's `malloc_np.h` supplies a declaration expected by the CTS framework's Unix allocation code. The adapter's resolver object imports `vk_icdGetInstanceProcAddr`, and the ordinary relocatable link resolves it against the pinned RADV archive. Two builds of the combined object matched byte for byte at SHA-256 `0b14ebf01eeb1e8d69aea4fff1652d40d5c46342e40a4fd78b0feb98741abca0`. Its remaining imports include CTS framework and platform symbols. PS5 execution remains `NOT_RUN`.
+
+The larger PS5-target compilation also completed CTS's platform, common, Vulkan framework and compute static archives, including the shader compiler dependencies. Reproduce this stage in the same PS5 object build directory.
+
+```bash
+ninja -C "$capture/ps5-target" -j4 tcutil-platform deqp-vk-compute
+(
+  cd "$capture/ps5-target"
+  sha256sum framework/{platform/libtcutil-platform,common/libtcutil}.a \
+    external/vulkancts/framework/vulkan/libvkutil.a \
+    external/vulkancts/modules/vulkan/compute/libdeqp-vk-compute.a
+)
+```
+
+### Link the focused CTS executable for PS5
+
+The local registrar builds the `dEQP-VK.compute.pipeline.basic` group through the original Khronos factory. The case filter selects `copy_ssbo_single_invocation` from that group. The build uses the original application runner and QPA writer. Set `standalone_link` to the verified output directory of the [standalone ELF link](#link-the-build-host-elf), which supplies the pinned startup objects and AGC link stubs.
+
+```bash
+set -eu
+for attempt in focused-ps5 focused-ps5-repeat; do
+  bash "$fixture/link-focused-ps5.sh" "$capture/$attempt" "$capture/ps5-target" \
+    "$sdk" "$radv" "$standalone_link"
+  (cd "$capture/$attempt" && sha256sum --quiet --strict -c SHA256SUMS)
+done
+cmp "$capture"/{focused-ps5,focused-ps5-repeat}/deqp-vk-ps5-link-only.elf
+cmp "$capture"/{focused-ps5,focused-ps5-repeat}/import-stub-candidates.tsv
+mkdir "$capture/focused-linux-objects"
+python3 -B "$fixture/compile-focused.py" "$cts_build" "$capture/focused-linux-objects" \
+  > "$capture/focused-linux-objects/inputs.txt"
+python3 -B "$fixture/relink-linux.py" "$cts_build" "$capture/focused-linux" \
+  "$probe_tools/include" /usr/lib/x86_64-linux-gnu/libvulkan.so.1 \
+  --focused-objects "$capture/focused-linux-objects/inputs.txt"
+```
+
+Run the same bounded case filter and QPA verifier from `$capture/focused-linux`. The focused Linux build returned exit 0 and a complete QPA with `Pass (Compute succeeded)`. Its QPA SHA-256 was `46e18b3df3b1b069f00516bcea16dcecf0245b29e81f43c60f29f6e937f5d0ac`. The checked-out external revisions matched the [original CTS build inventory](#reproduce-the-single-cts-smoke-on-linux), SHA-256 `8f4453c774c714978f078ab5ba95c5588f174f2b1bc84ad7dadb19aec468b9b8`.
+
+Two PS5 links produced byte-identical ELF64 x86-64 executables at SHA-256 `996213f104aa28e67dc8eda1124288e071022c9b8411ada5c9a54f26e5520ab5`. LLD accepted the link with `--no-undefined` using the public stub inputs. All 288 strong and three weak dynamic imports had public stub candidates across seven declared SONAMEs. The link uses the zlib implementation embedded in RADV. The CTS fallback archive would duplicate its symbols.
+
+The full stock `deqp-vk` target also compiled its sources and archives. Its default executable link requested `-lexecinfo`, `-lm` and `-lrt`, which are absent as separate SDK libraries. An ordinary ELF link using the same CTS objects and the pinned RADV link recipe completed with SHA-256 `e2357f51350ae6db8b45bd833246d6573288bdef0daf0e0115ae27727d5e12b7`. The focused ELF is the package candidate for the M0 case. Final package, runtime providers and execution on the PS5 Slim 13.60 still require verification.
+
 ## Standalone RADV compute
 
 The `m0.radv.compute` fixture adapts the offscreen storage-buffer test and shader from PS5_Vulkan `7f492b4c6f67a4e8c8c67a4272cfeef22abea9cc` under GPL-3.0-or-later. It keeps the 64 groups of 64 invocations and the 4,096-word `i * 3 + 7` reference. The fixture uses Vulkan 1.0 synchronization and includes a noncoherent memory path. [Upstream compute test][radv-compute], [upstream shader][radv-compute-shader].
@@ -381,6 +459,48 @@ python3 -B tests/fixtures/m0-radv-compute/check-result-verifier.py "$captures/ll
 ```
 
 The new llvmpipe invocation recorded `PASS`, 4,096 words, one start marker and exit 0. The missing-ICD invocation recorded `ERROR` at `vkCreateInstance`, Vulkan result -9, one start marker and exit 1. Both captured manifests verified. All 18 regression checks passed, including the original captures, duplicates, truncation, invalid fields and inconsistent exit codes. Derived cases exercised file validation on the host.
+
+### Run the homebrew timing probe on Linux
+
+Build the fixture with the Linux commands above. `m0_radv_compute_timing` uses the same shader, Vulkan setup and CPU oracle as `m0_radv_compute`. It checks one dispatch before timing, warms up five times and records 30 samples. It reuses the pipeline and command buffer, clears the 16 KiB output between dispatches and checks all 4,096 words on each dispatch. Capture JSON and diagnostics in separate files.
+
+```bash
+export VK_DRIVER_FILES=/usr/share/vulkan/icd.d/lvp_icd.json MESA_SHADER_CACHE_DISABLE=true
+ctest --test-dir "$out" --output-on-failure
+for run in 1 2 3; do
+  timeout --foreground 20s "$out/m0_radv_compute_timing" > "$out/run-$run.json" 2> "$out/run-$run.log"
+done
+timeout --foreground 20s "$out/m0_radv_compute_timing" --verbose > "$out/verbose.json" 2> "$out/verbose.log"
+```
+
+The report records nanoseconds from `steady_clock` for `vkQueueSubmit`, `vkWaitForFences` and the full interval from the start of submission to observed completion. Preparation, readback and logging are outside these intervals. The report retains all samples in order, the average of the middle two samples as the median, nearest-rank p95 and the min, max and range. `gpu_execution_ns` is null. `--verbose` adds one event per completed and checked dispatch. Failure records give the Vulkan stage or mismatch, with the dispatch phase and index on standard error.
+
+On llvmpipe 26.0.8, the three runs passed with host-observed completion medians of 45,975.5 ns, 36,667.5 ns and 52,591 ns. The verbose run emitted 36 dispatch events. CTest passed all three tests, including summary recomputation, missing ICD, invalid option, a successful fence wait with no storage writes, and an injected timeout. Both injected dispatch faults stopped the run with no passing timing report. A separate run with Vulkan validation and synchronization checks active passed without validation messages. These timings characterize the Linux execution path used to verify the probe. The local evidence is under `build/m0-homebrew-timing` with source, build, toolchain and report hashes in `host-SHA256SUMS`.
+
+The PS5 smoke fixture passed the relocatable check and produced two byte-identical pre-packaging ELFs with SHA-256 `f35f3da5d11b83c4df283470a29656cd70db35a8de860ac157b6ea33ea4a0c4d`. See `ps5-final`, `ps5-link-first` and `ps5-link-repeat` in the local evidence directory. The [homebrew app architecture](ARCHITECTURE.md#standalone-homebrew-app) describes how this evidence feeds the planned console runner.
+
+### Cross-build the homebrew timing probe for PS5
+
+Use `--timing` to select the shared timing workload and PS5 RADV resolver. Inherit `sdk`, `radv` and `upstream` from the [pre-packaging link procedure](#link-the-build-host-elf). The two passes each compile and link the timing executable into fresh directories.
+
+```bash
+fixture=tests/fixtures/m0-radv-compute
+timing_out=$(mktemp -d "$PWD/build/m0-portable-timing.XXXXXX")
+for attempt in first repeat; do
+  cross="$timing_out/ps5-timing-$attempt"
+  link="$timing_out/ps5-timing-link-$attempt"
+  "$fixture/cross-check.sh" "$cross" "$sdk" "$radv" --timing
+  "$fixture/elf-link-check.sh" "$link" "$sdk" "$radv" "$cross" "$upstream"
+  (cd "$link" && sha256sum --quiet --strict -c SHA256SUMS)
+done
+cmp "$timing_out"/ps5-timing-{first,repeat}/m0-radv-compute-ps5.o
+cmp "$timing_out"/ps5-timing-link-{first,repeat}/m0-radv-compute-link-only.elf
+sha256sum "$timing_out"/ps5-timing-link-{first,repeat}/m0-radv-compute-link-only.elf
+```
+
+The two builds under `build/m0-portable-timing` matched at the relocatable and final ELF stages. The timing ELF SHA-256 is `1771a17336aa5279cf87288037a342c3d0872a675bae25ec6a8fb8847c40a58d`. The validated SPIR-V matches the Linux probe byte for byte. Rechecking the Linux build passed all three CTests and its verbose run recorded 30 samples and 36 dispatch events. An unknown cross-build option exits 2 before creating a build directory.
+
+The default PS5 build still produces the original single-dispatch ELF byte for byte. The timing build pulls two more members from the pinned `libc++.a` and has the same dynamic import list as the single-dispatch build. Public stub candidates for `clock_gettime` are `libkernel.sprx` and `libkernel_sys.sprx`. The report and diagnostic logging imports `fprintf` and `fflush` have a candidate in `libSceLibcInternal.sprx`. The ELF link verifies those declarations on the build host. Title packaging, runtime clock behavior, launch and report retrieval on the Slim remain `NOT_RUN`.
 
 ### Check Vulkan validation diagnostics
 
@@ -462,6 +582,46 @@ The LLD section map and archive extraction table also matched across the repeate
 All 284 strong imports and three weak imports had public candidates with matching symbol types. Of the strong imports, 112 appeared under both `libkernel.sprx` and `libkernel_sys.sprx`. The other 172 appeared under a single SONAME. The SDK files `libc_stub_weak.so` and `libSceLibcInternal.so` were byte-identical and supplied duplicate candidates for the same SONAME. The two links produced matching 558-row inventories. Omitting the AGC driver stub caused the inventory command to report the missing `libSceAgcDriver.prx` SONAME and exit 1. A separate generic Linux ELF fixture with a matching SONAME but a missing symbol also failed the strong-import check. [SDK stub aliases][sdk-stub-aliases].
 
 The weak imports are `fclose`, `fflush` and `malloc_usable_size`. Check `fflush` during the final runtime review because the fixture calls it to flush the start marker and the SDK wrapper calls the underlying `fflush`. The inventory describes build-host declarations. The final package review must establish which providers and ABIs are available to the title on firmware 13.60. [Fixture entry point](../tests/fixtures/m0-radv-compute/main.cpp), [SDK flush wrapper][sdk-flush-wrapper].
+
+### Stage the title review archive
+
+Use the two link directories and their common cross-build. The exporter verifies the existing SHA-256 manifests, checks that both links used the supplied cross-build and requires agreement on the ELF and its link reports. It takes a fresh ZIP path in an existing output directory and uses Python 3.11 or later.
+
+```bash
+review=$(mktemp -d "$PWD/build/m0-title-review.XXXXXX")
+builder=tests/fixtures/m0-radv-compute/stage-title-review.py
+for name in first repeat; do
+  python3 -B "$builder" "$link_out/first" "$link_out/repeat" "$cross_out" "$review/$name.zip"
+done
+cmp "$review/first.zip" "$review/repeat.zip"
+python3 -m zipfile -t "$review/first.zip"
+python3 -m zipfile -e "$review/first.zip" "$review/inspect"
+(cd "$review/inspect" && sha256sum --strict -c SHA256SUMS)
+```
+
+`manifest.json` identifies the ELF and workload, source hashes, SDK and RADV revisions, linked archives and required runtime libraries. The `application` entry records the display name **ProsperoVK Lab** and the lab-assigned UUID `a5acce60-1153-47a5-8c89-80f3413d55fb`. Repeated exports use the same identity. The smoke ZIP includes the original ELF, the validated shader, the import reports and the host result verifier. The manifest omits host paths from the component inventory. Keep the ZIP local for title review and use the final package's file list for any distribution review. [Component review](UPSTREAM.md#standalone-compute-component-review).
+
+The two exports with the app identity from `build/m0-homebrew-timing` matched byte for byte and all extracted entries passed their checksum checks. The extracted ELF matched the original link. The manifest lists seven runtime library declarations. The ZIP SHA-256 is `754f58a2f07708091721c1daa63aa094d9400cc1a7cc268cf3a7e4a5b6a877c2`. The initial exporter verification also rejected an altered dynamic-table report. Rehashing the altered file still triggered the link-record consistency check. Both attempts left the requested ZIP path absent, and an existing archive survived an attempted export to the same path.
+
+The next acceptance evidence is the installable title and its digest from an authorized deployment environment, the runtime providers and verified launch and report retrieval. The review archive leaves these fields open and records console validation as `NOT_RUN`. [Console procedure](HARDWARE_VALIDATION.md#m0-standalone-radv-compute-check).
+
+#### Export the timing review ZIP
+
+Use `timing_out` from the [timing cross-build](#cross-build-the-homebrew-timing-probe-for-ps5). Link the first cross-build again so both link manifests refer to the same cross-build receipt used by the exporter.
+
+```bash
+cross="$timing_out/ps5-timing-first"
+first="$timing_out/ps5-timing-link-first"
+repeat="$timing_out/ps5-timing-link-review"
+"$fixture/elf-link-check.sh" "$repeat" "$sdk" "$radv" "$cross" "$upstream"
+review_zip="$timing_out/prosperovk-lab-ps5-benchmark-review.zip"
+python3 -B "$fixture/stage-title-review.py" "$first" "$repeat" "$cross" "$review_zip"
+python3 -m zipfile -t "$review_zip"
+```
+
+The timing review ZIP identifies the original PS5 benchmark ELF, its source files and dependencies, and its report capture contract. The manifest records timing mode, JSON report version 1 and the optional `--verbose` argument. The smoke archive retains its single-dispatch verifier. The `title` fields remain open pending a verified package and launch environment.
+
+The two timing exports in `build/m0-ps5-benchmark-package` matched byte for byte with SHA-256 `8f0eba9df3c522e77584c7f21a87e3eb5e69a4e9c4454b3f8ec58f1c27f9e177`. All archived file hashes verified, and the extracted ELF matched the original link. The smoke export retained its original report contract and verifier. A cross-build manifest with both entry sources was rejected before archive creation.
 
 ### Verify RADV archive and generated inputs
 

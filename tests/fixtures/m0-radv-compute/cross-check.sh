@@ -4,8 +4,13 @@
 set -euo pipefail
 export LC_ALL=C
 
-if [[ $# -ne 3 ]]; then
-    printf 'Usage: %s NEW_BUILD_DIR SDK_DIR RADV_DIR\n' "${0##*/}" >&2
+entry_source=main.cpp
+defines=(-DM0_RADV_COMPUTE_PS5)
+if [[ $# -eq 4 && $4 == --timing ]]; then
+    entry_source=timing-main.cpp
+    defines+=(-DM0_RADV_COMPUTE_TIMING)
+elif [[ $# -ne 3 ]]; then
+    printf 'Usage: %s NEW_BUILD_DIR SDK_DIR RADV_DIR [--timing]\n' "${0##*/}" >&2
     exit 2
 fi
 
@@ -29,7 +34,8 @@ if ! mkdir -- "$1"; then
 fi
 cd -- "$1"
 
-sha256sum "$fixture_dir"/{compute.comp,compute.cpp,compute.hpp,main.cpp,CMakeLists.txt,cross-check.sh} \
+sha256sum "$fixture_dir"/{compute.comp,compute.cpp,compute.hpp,CMakeLists.txt,cross-check.sh} \
+    "$fixture_dir/$entry_source" \
     "$archive" "$sdk_lib"/{libc++.a,libc++abi.a,libunwind.a,libps5platform.a} "$builtins" \
     > input-sha256.txt
 
@@ -38,10 +44,9 @@ cmake "-DSMOKE_SHADER_SOURCE=$fixture_dir/compute.comp" \
     "-DSMOKE_GLSLANG=$(command -v glslangValidator)" "-DSMOKE_SPIRV_VAL=$(command -v spirv-val)" \
     -P "$fixture_dir/CMakeLists.txt"
 
-for source in compute main; do
-    "$sdk_dir/bin/prospero-clang++" -std=c++20 -DM0_RADV_COMPUTE_PS5 \
-        -I"$radv_dir/include" -I"$PWD" -c "$fixture_dir/$source.cpp" -o "$source.o"
-done
+compile=("$sdk_dir/bin/prospero-clang++" -std=c++20 "${defines[@]}" -I"$radv_dir/include" -I"$PWD")
+"${compile[@]}" -c "$fixture_dir/compute.cpp" -o compute.o
+"${compile[@]}" -c "$fixture_dir/$entry_source" -o main.o
 
 ld.lld -r -o m0-radv-compute-ps5.o --print-archive-stats=archive-members.tsv \
     --wrap=malloc --wrap=calloc --wrap=realloc --wrap=free \

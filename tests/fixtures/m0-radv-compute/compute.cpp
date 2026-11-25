@@ -7,6 +7,11 @@
 #include <cstdio>
 #include <cstring>
 
+#if defined(M0_RADV_COMPUTE_TIMING)
+#include <algorithm>
+#include <chrono>
+#endif
+
 #include "compute_spv.hpp"
 
 namespace {
@@ -97,6 +102,8 @@ struct Workload {
     VkDeviceMemory memory = VK_NULL_HANDLE;
     void* mapped = nullptr;
     bool coherent = false;
+    std::uint32_t memory_type_index = 0;
+    VkMemoryPropertyFlags memory_flags = 0;
     VkShaderModule shader = VK_NULL_HANDLE;
     VkDescriptorSetLayout set_layout = VK_NULL_HANDLE;
     VkPipelineLayout pipeline_layout = VK_NULL_HANDLE;
@@ -104,6 +111,8 @@ struct Workload {
     VkDescriptorPool descriptor_pool = VK_NULL_HANDLE;
     VkDescriptorSet set = VK_NULL_HANDLE;
     VkCommandPool command_pool = VK_NULL_HANDLE;
+    VkCommandBuffer command = VK_NULL_HANDLE;
+    VkQueue queue = VK_NULL_HANDLE;
     VkFence fence = VK_NULL_HANDLE;
     bool abandon = false;
 
@@ -244,6 +253,16 @@ std::uint32_t memory_type(const VkPhysicalDeviceMemoryProperties& properties, st
     return best;
 }
 
+bool clear_buffer(Workload& state) {
+    std::memset(state.mapped, 0, buffer_size);
+    VkMappedMemoryRange range{};
+    range.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
+    range.memory = state.memory;
+    range.size = VK_WHOLE_SIZE;
+    return state.coherent || state.check(state.vk.FlushMappedMemoryRanges(state.device, 1, &range),
+                                         "vkFlushMappedMemoryRanges");
+}
+
 bool prepare_buffer(Workload& state, const Candidate& candidate) {
     auto& vk = state.vk;
     const VkDevice device = state.device;
@@ -281,7 +300,9 @@ bool prepare_buffer(Workload& state, const Candidate& candidate) {
         diagnostic("UNSUPPORTED", "buffer_memory_requirements", "no_compatible_core_host_visible_memory");
         return false;
     }
-    state.coherent = (candidate.memory.memoryTypes[type].propertyFlags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) != 0;
+    state.memory_type_index = type;
+    state.memory_flags = candidate.memory.memoryTypes[type].propertyFlags;
+    state.coherent = (state.memory_flags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) != 0;
 
     VkMemoryAllocateInfo allocation{};
     allocation.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
@@ -293,12 +314,7 @@ bool prepare_buffer(Workload& state, const Candidate& candidate) {
         return false;
     }
 
-    std::memset(state.mapped, 0, buffer_size);
-    VkMappedMemoryRange range{};
-    range.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
-    range.memory = state.memory;
-    range.size = VK_WHOLE_SIZE;
-    return state.coherent || state.check(vk.FlushMappedMemoryRanges(device, 1, &range), "vkFlushMappedMemoryRanges");
+    return clear_buffer(state);
 }
 
 bool prepare_pipeline(Workload& state) {
@@ -375,7 +391,7 @@ bool prepare_pipeline(Workload& state) {
     return true;
 }
 
-bool submit_compute(Workload& state, const Candidate& candidate) {
+bool record_compute(Workload& state, const Candidate& candidate, VkCommandBufferUsageFlags usage) {
     auto& vk = state.vk;
     const VkDevice device = state.device;
     VkCommandPoolCreateInfo pool_info{};
@@ -390,14 +406,14 @@ bool submit_compute(Workload& state, const Candidate& candidate) {
     allocate.commandPool = state.command_pool;
     allocate.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
     allocate.commandBufferCount = 1;
-    VkCommandBuffer command = VK_NULL_HANDLE;
-    if (!state.acquire(command, "vkAllocateCommandBuffers", vk.AllocateCommandBuffers, device, &allocate)) {
+    if (!state.acquire(state.command, "vkAllocateCommandBuffers", vk.AllocateCommandBuffers, device, &allocate)) {
         return false;
     }
 
+    const VkCommandBuffer command = state.command;
     VkCommandBufferBeginInfo begin{};
     begin.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    begin.flags = usage;
     if (!state.check(vk.BeginCommandBuffer(command, &begin), "vkBeginCommandBuffer")) return false;
 
     vk.CmdBindPipeline(command, VK_PIPELINE_BIND_POINT_COMPUTE, state.pipeline);
@@ -417,21 +433,53 @@ bool submit_compute(Workload& state, const Candidate& candidate) {
     fence_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
     if (!state.acquire(state.fence, "vkCreateFence", vk.CreateFence, device, &fence_info, nullptr)) return false;
 
-    VkQueue queue = VK_NULL_HANDLE;
-    vk.GetDeviceQueue(device, candidate.queue_family, 0, &queue);
-    if (!queue) {
+    vk.GetDeviceQueue(device, candidate.queue_family, 0, &state.queue);
+    if (!state.queue) {
         diagnostic("ERROR", "vkGetDeviceQueue", "queue_is_null");
         return false;
     }
+    return true;
+}
+
+struct HostTiming {
+    std::int64_t submission_ns = 0;
+    std::int64_t fence_wait_ns = 0;
+    std::int64_t completion_ns = 0;
+};
+
+bool submit_compute(Workload& state, [[maybe_unused]] HostTiming* timing = nullptr) {
+    auto& vk = state.vk;
+    const VkDevice device = state.device;
     VkSubmitInfo submit{};
     submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
     submit.commandBufferCount = 1;
-    submit.pCommandBuffers = &command;
-    if (!state.check(vk.QueueSubmit(queue, 1, &submit, state.fence), "vkQueueSubmit")) return false;
+    submit.pCommandBuffers = &state.command;
+#if defined(M0_RADV_COMPUTE_TIMING)
+    using Clock = std::chrono::steady_clock;
+    const auto started = timing ? Clock::now() : Clock::time_point{};
+#endif
+    const VkResult submitted = vk.QueueSubmit(state.queue, 1, &submit, state.fence);
+#if defined(M0_RADV_COMPUTE_TIMING)
+    const auto submit_finished = timing ? Clock::now() : Clock::time_point{};
+#endif
+    if (!state.check(submitted, "vkQueueSubmit")) return false;
 
     // Only successful wait proves the submitted resources can be destroyed.
     state.abandon = true;
+#if defined(M0_RADV_COMPUTE_TIMING)
+    const auto wait_started = timing ? Clock::now() : Clock::time_point{};
+#endif
     const VkResult waited = vk.WaitForFences(device, 1, &state.fence, VK_TRUE, fence_timeout_ns);
+#if defined(M0_RADV_COMPUTE_TIMING)
+    if (timing && waited == VK_SUCCESS) {
+        const auto finished = Clock::now();
+        using std::chrono::duration_cast;
+        using std::chrono::nanoseconds;
+        timing->submission_ns = duration_cast<nanoseconds>(submit_finished - started).count();
+        timing->fence_wait_ns = duration_cast<nanoseconds>(finished - wait_started).count();
+        timing->completion_ns = duration_cast<nanoseconds>(finished - started).count();
+    }
+#endif
     if (waited == VK_TIMEOUT) {
         std::printf("{\"case_id\":\"%s\",\"status\":\"TIMEOUT\",\"stage\":\"vkWaitForFences\","
                     "\"timeout_ns\":%" PRIu64 "}\n", case_id, fence_timeout_ns);
@@ -448,7 +496,7 @@ bool submit_compute(Workload& state, const Candidate& candidate) {
         || state.check(vk.InvalidateMappedMemoryRanges(device, 1, &range), "vkInvalidateMappedMemoryRanges");
 }
 
-int verify_words(const Workload& state, const Candidate& candidate) {
+bool verify_words(const Workload& state) {
     const auto* values = static_cast<const unsigned char*>(state.mapped);
     std::uint32_t wrong = 0;
     std::uint32_t first = 0;
@@ -468,9 +516,12 @@ int verify_words(const Workload& state, const Candidate& candidate) {
                     ",\"mismatch_count\":%" PRIu32 ",\"first_mismatch_index\":%" PRIu32
                     ",\"first_mismatch_expected\":%" PRIu32 ",\"first_mismatch_actual\":%" PRIu32 "}\n",
                     case_id, word_count, wrong, first, first * 3u + 7u, first_actual);
-        return 1;
+        return false;
     }
+    return true;
+}
 
+int report_smoke_pass(const Workload& state, const Candidate& candidate) {
     std::printf("{\"case_id\":\"%s\",\"status\":\"PASS\",\"checked_words\":%" PRIu32
                 ",\"vendor_id\":%" PRIu32 ",\"device_id\":%" PRIu32 ",\"api_version\":%" PRIu32
                 ",\"queue_family\":%" PRIu32 ",\"host_coherent\":%s}\n",
@@ -479,9 +530,85 @@ int verify_words(const Workload& state, const Candidate& candidate) {
     return 0;
 }
 
-} // namespace
+#if defined(M0_RADV_COMPUTE_TIMING)
 
-int m0_radv_compute(PFN_vkGetInstanceProcAddr resolve) {
+constexpr std::size_t warmup_count = 5;
+constexpr std::size_t sample_count = 30;
+#if defined(M0_RADV_COMPUTE_PS5)
+constexpr char timing_target[] = "ps5";
+#else
+constexpr char timing_target[] = "linux";
+#endif
+
+void report_metric(const char* name, const std::array<HostTiming, sample_count>& samples,
+                   std::int64_t HostTiming::* metric) {
+    std::array<std::int64_t, sample_count> sorted{};
+    std::printf("\"%s\":{\"samples\":[", name);
+    for (std::size_t i = 0; i < samples.size(); ++i) {
+        sorted[i] = samples[i].*metric;
+        std::printf("%s%" PRId64, i == 0 ? "" : ",", sorted[i]);
+    }
+    std::sort(sorted.begin(), sorted.end());
+    const double median = (static_cast<double>(sorted[sample_count / 2 - 1])
+                           + static_cast<double>(sorted[sample_count / 2])) / 2;
+    constexpr auto p95_index = (95 * sample_count + 99) / 100 - 1;
+    std::printf("],\"median\":%.1f,\"p95\":%" PRId64 ",\"min\":%" PRId64
+                ",\"max\":%" PRId64 ",\"range\":%" PRId64 "}",
+                median, sorted[p95_index], sorted.front(), sorted.back(), sorted.back() - sorted.front());
+}
+
+int measure_compute(Workload& state, const Candidate& candidate, PFN_vkGetDeviceProcAddr resolve, bool verbose) {
+    const auto reset_fences = entry<PFN_vkResetFences>(resolve, state.device, "vkResetFences");
+    if (!reset_fences) return diagnostic("ERROR", "device_dispatch", "vkResetFences");
+    if (!record_compute(state, candidate, 0)) return 1;
+
+    std::array<HostTiming, sample_count> samples{};
+    for (std::size_t i = 0; i < 1 + warmup_count + sample_count; ++i) {
+        const char* phase = "correctness";
+        std::size_t index = 1;
+        HostTiming* timing = nullptr;
+        if (i > warmup_count) {
+            phase = "sample";
+            index = i - warmup_count;
+            timing = &samples[index - 1];
+        } else if (i != 0) {
+            phase = "warmup";
+            index = i;
+        }
+        const bool ready = i == 0 || (clear_buffer(state)
+            && state.check(reset_fences(state.device, 1, &state.fence), "vkResetFences"));
+        const bool passed = ready && submit_compute(state, timing) && verify_words(state);
+        if (verbose || !passed) {
+            std::fprintf(stderr, "{\"event\":\"dispatch\",\"phase\":\"%s\",\"index\":%zu,\"status\":\"%s\"}\n",
+                         phase, index, passed ? "PASS" : "FAILED");
+        }
+        if (!passed) return 1;
+    }
+
+    std::printf("{\"case_id\":\"%s\",\"schema_version\":1,\"status\":\"PASS\",\"execution_target\":\"%s\","
+                "\"vendor_id\":%" PRIu32 ",\"device_id\":%" PRIu32 ",\"api_version\":%" PRIu32
+                ",\"driver_version\":%" PRIu32 ",\"queue_family\":%" PRIu32 ",\"memory_type_index\":%" PRIu32
+                ",\"memory_property_flags\":%" PRIu32 ",\"buffer_bytes\":%" PRIu64 ",\"groups\":%" PRIu32
+                ",\"local_size\":%" PRIu32 ",\"checked_words_per_dispatch\":%" PRIu32
+                ",\"initial_checks\":1,\"warmups\":%zu,\"sample_count\":%zu,\"verbose\":%s,"
+                "\"timing_clock\":\"steady_clock\",\"gpu_execution_ns\":null,"
+                "\"gpu_timing_unavailable_reason\":\"timestamps_not_measured_by_probe\",",
+                case_id, timing_target, candidate.properties.vendorID, candidate.properties.deviceID,
+                candidate.properties.apiVersion, candidate.properties.driverVersion, candidate.queue_family,
+                state.memory_type_index, state.memory_flags, static_cast<std::uint64_t>(buffer_size), group_count,
+                workgroup_size, word_count, warmup_count, sample_count, verbose ? "true" : "false");
+    report_metric("cpu_queue_submit_ns", samples, &HostTiming::submission_ns);
+    std::putchar(',');
+    report_metric("cpu_fence_wait_ns", samples, &HostTiming::fence_wait_ns);
+    std::putchar(',');
+    report_metric("cpu_submit_to_completion_ns", samples, &HostTiming::completion_ns);
+    std::puts("}");
+    return std::fflush(stdout) == 0 && !std::ferror(stdout) ? 0 : 1;
+}
+
+#endif
+
+int run_compute(PFN_vkGetInstanceProcAddr resolve, [[maybe_unused]] const bool* timing_verbose) {
     if (!resolve) return diagnostic("ERROR", "global_dispatch", "missing_instance_resolver");
     const auto create_instance = entry<PFN_vkCreateInstance>(resolve, VkInstance{}, "vkCreateInstance");
     if (!create_instance) return diagnostic("ERROR", "global_dispatch", "missing_vkCreateInstance");
@@ -521,8 +648,23 @@ int m0_radv_compute(PFN_vkGetInstanceProcAddr resolve) {
         return diagnostic("ERROR", "device_dispatch", missing);
     }
 
-    if (!prepare_buffer(state, candidate) || !prepare_pipeline(state) || !submit_compute(state, candidate)) {
-        return 1;
-    }
-    return verify_words(state, candidate);
+    if (!prepare_buffer(state, candidate) || !prepare_pipeline(state)) return 1;
+#if defined(M0_RADV_COMPUTE_TIMING)
+    if (timing_verbose) return measure_compute(state, candidate, device_proc, *timing_verbose);
+#endif
+    if (!record_compute(state, candidate, VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT)
+        || !submit_compute(state) || !verify_words(state)) return 1;
+    return report_smoke_pass(state, candidate);
 }
+
+} // namespace
+
+int m0_radv_compute(PFN_vkGetInstanceProcAddr resolve) {
+    return run_compute(resolve, nullptr);
+}
+
+#if defined(M0_RADV_COMPUTE_TIMING)
+int m0_radv_compute_timing(PFN_vkGetInstanceProcAddr resolve, bool verbose) {
+    return run_compute(resolve, &verbose);
+}
+#endif

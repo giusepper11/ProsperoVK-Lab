@@ -24,6 +24,7 @@ Initial proposed hardware target: PS5 Slim, firmware 13.60, subject to M0 verifi
 - [Vulkan coverage](docs/VULKAN_COVERAGE.md): test candidates, prerequisites and evidence.
 - [M0 toolchain evidence](docs/M0_TOOLCHAIN.md): Linux checks and the pinned PS5 RADV cross-build.
 - [Hardware validation](docs/HARDWARE_VALIDATION.md): console safety and evidence.
+- [M0 handoff](docs/HANDOFF.md): verified work, reproduction commands and the remaining hardware gate.
 - [OpenSpec workflow](openspec/README.md): change management.
 - [Contributing](CONTRIBUTING.md): how to submit changes.
 
