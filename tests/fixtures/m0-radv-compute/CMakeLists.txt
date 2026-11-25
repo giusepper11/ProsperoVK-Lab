@@ -135,3 +135,13 @@ add_test(
             "$<TARGET_FILE:m0_radv_compute_timing>" "$<TARGET_FILE:m0_radv_timing_injected>"
 )
 set_tests_properties(m0_radv_compute_timing PROPERTIES TIMEOUT 30)
+
+if(DEFINED M0_TEMPLATE_SRC)
+    add_executable(m0_title_capture ../m0-title/main.cpp ../m0-title/host-platform.cpp)
+    target_include_directories(m0_title_capture PRIVATE "${M0_TEMPLATE_SRC}/ps5/src" "${CMAKE_CURRENT_SOURCE_DIR}")
+    target_compile_definitions(m0_title_capture PRIVATE M0_CAPTURE_ROOT="capture" M0_BUILD_ID="linux-test")
+    target_link_libraries(m0_title_capture PRIVATE m0_radv_compute_workload)
+    add_test(NAME m0_title_capture COMMAND "${Python3_EXECUTABLE}"
+             "${CMAKE_CURRENT_SOURCE_DIR}/../m0-title/check-host.py" "$<TARGET_FILE:m0_title_capture>"
+             "${CMAKE_CURRENT_SOURCE_DIR}/../../../tools/verify-m0-radv-compute.py")
+endif()

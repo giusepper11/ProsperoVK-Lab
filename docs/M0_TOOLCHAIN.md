@@ -709,4 +709,8 @@ python3 tests/fixtures/m0-title/check-host.py build/m0-title-final/work/test-cap
   tools/verify-m0-radv-compute.py
 ```
 
-Console launch, runtime import resolution, observed notification delivery, writable capture and shell termination on the Slim remain `NOT_RUN`. [Manual deployment and capture](HARDWARE_VALIDATION.md#m0-standalone-radv-compute-check).
+At package creation console execution was `NOT_RUN`. The later hardware run verified writable capture and exercised the workload’s runtime imports. Notification delivery and normal shell exit remain unconfirmed. [Manual deployment and capture](HARDWARE_VALIDATION.md#m0-standalone-radv-compute-check).
+
+### Harness acceptance
+
+The supported entry point is [the M0 harness](HARNESS.md). The packaging section above records the original experiment. The unchanged hardware package and run are identified in [the first hardware baseline](HARDWARE_VALIDATION.md#first-verified-slim-baseline). Host rebuilds from later revisions carry distinct build IDs and require their own target evidence.

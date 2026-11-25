@@ -30,3 +30,8 @@ Resolve conflicts explicitly; do not silently change architecture or declare uns
 - Preserve raw measurements and test status, distinguish failure from unsupported and not run.
 - Update docs/specs and milestone status only with evidence. Do not mark a milestone complete if an exit gate is unmet.
 - Keep changes focused, reviewable and reversible. Never claim performance improvement from incomparable workloads.
+
+## PS5 artifact acceptance
+- Use `tools/m0 package NEW_OUT` for every change that affects PS5 execution. Require the complete title folder and validated ZIP. ELF and review outputs are intermediate evidence.
+- Follow [the harness contract](docs/HARNESS.md) for dependencies, package verification, authorized deployment and run retrieval. Track BUILD, PACKAGE, DEPLOY, EXECUTE, CORRECTNESS, PERFORMANCE and SHELL_EXIT per build and target.
+- Build and package on the host when hardware is unavailable. Obtain authorization for deployment and execution separately. Verify the retrieved journal against the deployed manifest before recording hardware results.

@@ -20,7 +20,9 @@
 - [ ] 2.1 Resolve the console CTS fork revision and compiled dependencies or obtain equivalent provenance from the authorized artifact provider. Verify console title linkage, packaging and hashes.
 - [ ] 2.2 Verify operator access, transfer, startup and log retrieval on a Slim with firmware 13.60. Run the selected case once and retain its original status, QPA, identified build and artifact digests.
 - [x] 2.3 Apply the reference-license direction to original work and record the rationale in `docs/UPSTREAM.md`. Verify that the `LICENSE` text matches the pinned PS5_Vulkan and SDK copies and mark original source files with `GPL-3.0-or-later`.
-- [ ] 2.4 Review combined title linkage and distribution against the actual component, source, asset and notice manifest. The [standalone pre-packaging inventory](../../../docs/UPSTREAM.md#standalone-compute-component-review) supplies evidence for the linked ELF.
+- [x] 2.4 Review the final title manifest, dynamic libraries, shipped notices and corresponding-source requirements. [Packaged title review](../../../docs/UPSTREAM.md#packaged-title-review). Public release remains separate.
 - [ ] 2.5 Verify M0 issue acceptance against the build and run artifacts, then update milestone status and archive the change after review.
 - [x] 2.6 Verify read-only management access and record reported firmware, model label and CTS title lookup in `docs/HARDWARE_VALIDATION.md`.
 - [x] 2.7 Record the operator's confirmation of the PS5 Slim model alongside the dashboard firmware evidence.
+
+Run-000001 verifies standalone title startup, transfer and compute capture. Tasks 2.1–2.2 still require the selected CTS case and its original QPA. Shell exit remains unconfirmed. [Hardware baseline](../../../docs/HARDWARE_VALIDATION.md#first-verified-slim-baseline).

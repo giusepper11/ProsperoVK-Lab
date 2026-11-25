@@ -1,6 +1,6 @@
 # Hardware validation
 
-M0 target: PS5 Slim, firmware 13.60, with an operator-provided authorized environment. The operator confirmed the Slim model, and Prospero Manager reported the firmware. M0 hardware status is `NOT_RUN`. The [upstream audit](UPSTREAM.md) identifies external console runs on other configurations. [Toolchain evidence](M0_TOOLCHAIN.md) records the local target compilation, archive build and link checks.
+M0 target: PS5 Slim, firmware 13.60, with an operator-provided authorized environment. The operator confirmed the Slim model, and Prospero Manager reported the firmware. The standalone hardware smoke and CPU timing capture passed. CTS execution and shell-exit evidence remain open. [Verified baseline](#first-verified-slim-baseline). The [upstream audit](UPSTREAM.md) identifies external console runs on other configurations. [Toolchain evidence](M0_TOOLCHAIN.md) records the local target compilation, archive build and link checks.
 
 ## Runbook
 1. Verify platform adapter, public toolchain, binary hash, driver revision, deployment method and documented recovery procedure on the actual device.
@@ -19,11 +19,11 @@ No firmware modification, persistence, privileged diagnostics, proprietary SDK a
 
 On 2026-11-24, the connected Prospero Manager returned firmware `13.60` and the generic model label `PS5 (Prospero)`. The operator separately identified the console as a PS5 Slim. The title library returned registered title IDs, with no match for the upstream CTS title `PPSA99015` or a Vulkan test title by name. The check used the dashboard's read-only `GET /api/system/info` and `GET /api/titles` routes. [Dashboard API source](https://github.com/notmaj0r/ProsperoMgr/blob/main/source/frontend/src/lib/api.js), [upstream CTS workflow](https://github.com/mihawk-99/PS5_Vulkan/blob/7f492b4c6f67a4e8c8c67a4272cfeef22abea9cc/docs/CTS.md#L191).
 
-Two intervening retries could not connect to the service. A subsequent check at 23:27 UTC returned HTTP 200 from both routes and confirmed firmware `13.60`. The refreshed catalog contained 23 entries and returned no match for ProsperoVK-Lab, Vulkan, dEQP, CTS or the candidate IDs `PPSA99015` and `PPSA99130`. Title build provenance, launch, Vulkan execution and result retrieval remain open. The Vulkan smoke status is `NOT_RUN`.
+Two intervening retries could not connect to the service. A subsequent check at 23:27 UTC returned HTTP 200 from both routes and confirmed firmware `13.60`. The refreshed catalog contained 23 entries and returned no match for ProsperoVK-Lab, Vulkan, dEQP, CTS or the candidate IDs `PPSA99015` and `PPSA99130`. At this preflight the Vulkan smoke was `NOT_RUN`.
 
 ## M0 file transfer check
 
-On 2026-11-25, Prospero Manager uploaded the timing review ZIP to the lab's data folder, `/data/prosperovk-lab`. The download from the same folder matched the local ZIP byte for byte. Both copies measured 42,624,959 bytes with SHA-256 `8f0eba9df3c522e77584c7f21a87e3eb5e69a4e9c4454b3f8ec58f1c27f9e177`. This verifies file transfer and retrieval for the review artifact. Console execution remains `NOT_RUN`. [File manager API](https://github.com/notmaj0r/ProsperoMgr/blob/main/source/frontend/src/lib/api.js#L303-L324), [archive evidence](M0_TOOLCHAIN.md#export-the-timing-review-zip).
+On 2026-11-25, Prospero Manager uploaded the timing review ZIP to the lab's data folder, `/data/prosperovk-lab`. The download from the same folder matched the local ZIP byte for byte. Both copies measured 42,624,959 bytes with SHA-256 `8f0eba9df3c522e77584c7f21a87e3eb5e69a4e9c4454b3f8ec58f1c27f9e177`. This verifies file transfer and retrieval for the review artifact. At this transfer check console execution was `NOT_RUN`. [File manager API](https://github.com/notmaj0r/ProsperoMgr/blob/main/source/frontend/src/lib/api.js#L303-L324), [archive evidence](M0_TOOLCHAIN.md#export-the-timing-review-zip).
 
 ## M0 operator smoke
 
@@ -61,7 +61,7 @@ This smoke checks launch, bounded Vulkan execution and output retrieval on the e
 
 The standalone fixture adapts the pinned upstream RADV compute workload. It submits one offscreen dispatch and compares 4,096 unsigned integer results against `i * 3 + 7`. Its case ID is `m0.radv.compute`. The build-host checks produced Linux execution evidence, a PS5-target relocatable object and a reproducible pre-packaging ELF. The Khronos CTS smoke retains its own case ID and evidence requirements. [Build-host checks](M0_TOOLCHAIN.md#standalone-radv-compute).
 
-The lab title folder and ZIP have passed [build-host validation](M0_TOOLCHAIN.md#build-the-deployable-m0-title). Slim 13.60 execution remains `NOT_RUN`.
+The lab title folder and ZIP have passed [build-host validation](M0_TOOLCHAIN.md#build-the-deployable-m0-title). The first Slim run is recorded [below](#first-verified-slim-baseline).
 
 1. Verify the ZIP SHA-256 and confirm `PPSA99743` is free in the local title library and destination. Manually transfer the complete folder to the homebrew environment's title directory (upstream uses `/data/homebrew/PPSA99743/`). Keep `eboot.bin` directly inside that directory. Record the package identity, console model, firmware and launch environment.
 2. Launch **ProsperoVK Lab**. The title requests a start notification, journals its build ID, and runs the exact offscreen smoke. A pass enables the bounded timing probe. Observe the result notification and shell exit separately. Use the existing 60-second observation deadline and stop after device loss or a suspected hang.
@@ -78,3 +78,26 @@ The lab title folder and ZIP have passed [build-host validation](M0_TOOLCHAIN.md
    ```
 
    The verifier returns 0 for one matching start marker, a complete `PASS` with 4,096 checked words and application exit 0. It returns 1 for a reported non-Pass outcome with the expected application exit, and 2 for invalid or incomplete capture. Retain the raw files and the original failure stage and status. Hardware acceptance also requires the verified console and package, a normal exit, and no device loss or hang. Keep hardware status `NOT_RUN` until operator results for the identified target are available.
+
+## First verified Slim baseline
+
+On 2026-11-25 the operator launched PPSA99743 on PS5 Slim, firmware 13.60. Run `run-000001` identifies build `c0c28392ddd5b8b62d9074a1b4eb27563bc8191a28198c25c9151dcae2f8a003`. A separate readback through Prospero Manager matched all 21 deployed files to the host-validated folder. A second retrieval of all five run artifacts matched the original capture byte for byte.
+
+| State | Evidence for this build |
+| --- | --- |
+| BUILD / PACKAGE | PASS. ZIP SHA-256 `072c62478a1292f1bd7b9fe96a6092aa909cbb5d7e70945926560ff2acecb87f`, verified embedded identity, runtime and executable. |
+| DEPLOY | PASS. Live readback matched the folder. |
+| EXECUTE | PASS. Journal and both result/return-code pairs retrieved from the identified console. |
+| CORRECTNESS | PASS. The shared oracle checks all 4,096 words against unsigned `3*i+7`; the smoke reported 4,096 checked and returned 0. Only the verdict and count are persisted. |
+| PERFORMANCE | PASS for CPU timing capture. Five warm-ups and 30 measured samples after initial validation. Timing workload returned 0. |
+| SHELL_EXIT | UNCONFIRMED. The saved filtered klog was empty. On recheck, Prospero Manager reported its klog disconnected with zero lines. Its ordinary log held 107 lines with no match for this title. The upstream hook flushes a message before requesting asynchronous shell closure. Both workload code files are written before that hook. |
+
+Pinned PS5_Mesa `1ba9874f478657ccf6da72ce55f0260164cc0bd0`, release RADV archive `d06eaf176b42fda32b740a660f343c1e72167cb11a6f6965669ba23437bdf441`. Vulkan driver version field 109060096, API version field 4211042, queue family 0, memory type 2, flags 6. Each dispatch writes 64 groups × 64 invocations to 16 KiB. The timing probe verifies fresh readback for each dispatch. Host steady-clock nanoseconds, median and nearest-rank p95 recalculated from all samples:
+
+| CPU interval | Median (µs) | p95 (µs) |
+| --- | ---: | ---: |
+| Queue submission | 15.075 | 16.358 |
+| Fence wait | 8.580 | 14.834 |
+| Submission to observed completion | 24.617 | 30.872 |
+
+The probe did not measure Vulkan timestamps. GPU duration is null; GPU timestamp support remains untested. This single run establishes a baseline for this build and workload. Raw report SHA-256 values are `6b4fc0ce65d80a9302781e6f37db0d2add2fa31cb7d1b4e069fac3792985bb2c` (smoke), `b1df15d1b265c8b1bc2181ab2a1aa3df3c56d27a8a20724e0eff892e8381a7da` (timing), `5c14906f0a02ebab39a9ad5b652da67721636c0cfefc421db9ce8e95513dc83b` (journal), and `9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa` (each return code). See [harness commands](HARNESS.md#transfer-and-evidence) for verification.

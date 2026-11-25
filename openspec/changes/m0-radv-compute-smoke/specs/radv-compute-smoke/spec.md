@@ -95,3 +95,15 @@ The build SHALL produce a transferable title directory and a ZIP rooted at its a
 #### Scenario: Capture unavailable
 - **WHEN** the title cannot open a fresh capture for a run
 - **THEN** it reports an error and returns through the title lifecycle before submitting GPU work.
+
+### Requirement: Reproducible package and hardware acceptance
+
+The harness SHALL build from source with pinned dependencies, verify the complete folder against the ZIP and build identity, and track build, package, deployment, execution, correctness, performance and shell exit independently.
+
+#### Scenario: Incomplete package
+- **WHEN** a required component is absent or differs from its manifest
+- **THEN** validation fails before the artifact is accepted for deployment.
+
+#### Scenario: Existing hardware capture
+- **WHEN** the journal identifies the packaged build and the smoke and timing reports verify
+- **THEN** report workload status and recomputed CPU timing independently from evidence of shell exit.

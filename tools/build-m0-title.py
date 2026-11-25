@@ -110,6 +110,8 @@ def main():
     if "digest: " + digest(work / "extracted.elf") not in (work / "eboot.bin.inspect").read_text().splitlines():
         raise ValueError("extracted title digest mismatch")
     manifest["eboot_sha256"] = digest(app / "eboot.bin")
+    manifest["files_sha256"] = {p.relative_to(app).as_posix(): digest(p)
+                                for p in sorted(app.rglob("*")) if p.is_file()}
     (app / "build.json").write_text(json.dumps(manifest, indent=2) + "\n")
     release = runpy.run_path(str(upstream / "tools/package-release.py"))
     zipfile = app.with_suffix(".zip")

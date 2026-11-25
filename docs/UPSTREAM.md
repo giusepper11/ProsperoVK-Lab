@@ -138,3 +138,9 @@ The final title review requires the actual package file list, including metadata
 [libc++abi terms]: https://github.com/llvm/llvm-project/blob/llvmorg-18.1.8/libcxxabi/LICENSE.TXT
 [libunwind terms]: https://github.com/llvm/llvm-project/blob/llvmorg-18.1.8/libunwind/LICENSE.TXT
 [compiler-rt terms]: https://github.com/llvm/llvm-project/blob/llvmorg-21.1.8/compiler-rt/LICENSE.TXT
+
+## Packaged title review
+
+Reviewed the 21 deployed files against the 072c6247… ZIP, build.json, native SELF records and `readelf -d build/m0-title-final/work/link/llvm-pie.elf`. The M0 executable links the shared lab compute, PS5_Vulkan CRT, template platform layer, whole RADV, SDK platform/C++ libraries and compiler builtins. Its nine dynamic dependencies are AGC, AGCDriver, AudioOut, LibcInternal, Pad, SystemService, UserService, VideoOut and libkernel. The folder carries the generated libc companion with upstream SHA-256 e6ff45d1…; link stubs stay on the host. The successful run exercises a subset of those imports.
+
+The original folder carries the generated icon, metadata, embedded shader, GPL text, template MIT license, PS5_Vulkan notices, Mesa license set, musl, allocator source attribution, LLVM and DejaVu notices. The title as combined includes GPL-3.0-or-later components. The pinned archive audit identifies additional file-level attributions. The hardened package adds SoftFloat, xxHash and TRE binary notices extracted from pinned source, the zlib 1.3.1 notice from the pinned wrap source and Mesa's BLAKE3 origin record. Before any public binary release, reconcile exact LLVM runtime and builtins source/notices, generated inputs, component-specific terms and corresponding buildable source against that release's manifest. The local title/ZIP is the manual-test artifact. No public distribution decision has been made.

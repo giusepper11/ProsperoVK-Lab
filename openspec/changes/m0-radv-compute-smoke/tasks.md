@@ -23,6 +23,8 @@
 
 - [ ] 3.1 Obtain a verified final title build and supported launch and result-capture path. Run once on the identified Slim with firmware 13.60 and record the evidence required by the hardware runbook.
 
+Run-000001 satisfies the standalone execution, correctness, CPU timing and result-capture portions of 3.1. Normal shell exit remains unconfirmed.
+
 ## Workflow follow-up
 
 - Review implementation and evidence before archiving the change.
@@ -31,3 +33,9 @@
 
 - [x] 4.1 Build the compute title with the template lifecycle, visible status and persistent capture.
 - [x] 4.2 Inspect executable and runtime, verify metadata, icon and ZIP round-trip on the host and record the paths and hashes.
+
+## 5. Harness and baseline
+
+- [x] Recover the working title recipe and exercise a clean-source cross-build.
+- [x] Verify package regressions, capture identity, timing statistics and the retrieved Slim baseline.
+- [x] Document deployment, retrieval and unresolved hardware gates.
