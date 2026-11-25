@@ -26,3 +26,8 @@
 ## Workflow follow-up
 
 - Review implementation and evidence before archiving the change.
+
+## 4. Manual deployment artifact
+
+- [x] 4.1 Build the compute title with the template lifecycle, visible status and persistent capture.
+- [x] 4.2 Inspect executable and runtime, verify metadata, icon and ZIP round-trip on the host and record the paths and hashes.

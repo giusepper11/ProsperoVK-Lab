@@ -2,7 +2,7 @@
 
 An open-source Vulkan validation, benchmarking, and regression testing framework for PlayStation 5, designed to accelerate graphics driver development and optimization.
 
-**Status:** M0 audit documented and Linux Vulkan feasibility verified with llvmpipe. The PS5 Slim firmware 13.60 gate remains open. The lab executable is planned for M1.
+**Status:** M0 audit documented and Linux Vulkan feasibility verified with llvmpipe. The PS5 Slim firmware 13.60 gate remains open. The [M0 compute homebrew folder and ZIP](docs/M0_TOOLCHAIN.md#build-the-deployable-m0-title) passed structural checks on the build host. The portable runner is planned for M1.
 
 ## Goals
 

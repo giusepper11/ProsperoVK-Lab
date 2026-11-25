@@ -664,3 +664,49 @@ The replay reproduced each module's SPIR-V, generated C++ and header byte for by
 [radv-compute]: https://github.com/mihawk-99/PS5_Vulkan/blob/7f492b4c6f67a4e8c8c67a4272cfeef22abea9cc/radv/radv_smoke.c#L442
 [radv-compute-shader]: https://github.com/mihawk-99/PS5_Vulkan/blob/7f492b4c6f67a4e8c8c67a4272cfeef22abea9cc/radv/shaders/smoke.comp
 [template-link]: https://github.com/mihawk-99/PS5_VulkanTemplate/blob/91179df760df1e6c6f2d4d172bc435319d79ff3c/ps5/tools/link-title.sh
+
+### Build the deployable M0 title
+
+On branch `feat/m0-vulkan-feasibility` at base `468a64b42fc96c74cb036738a978ba6b8f8695e0`, the M0 title adapter and builder produced these manual deployment artifacts.
+
+| Artifact | Local path | SHA-256 |
+| --- | --- | --- |
+| Title folder | `build/m0-title-final/dist/PPSA99743/` | File identities in `build.json` |
+| Deployment ZIP | `build/m0-title-final/dist/PPSA99743.zip` | `072c62478a1292f1bd7b9fe96a6092aa909cbb5d7e70945926560ff2acecb87f` |
+| Title executable | `build/m0-title-final/dist/PPSA99743/eboot.bin` | `ddcfb10d124548979d27204f83ec60f12976173ee5a41794463399b0ba44c851` |
+| Generated runtime | `build/m0-title-final/dist/PPSA99743/sce_module/libc.prx` | `e6ff45d16adf687855cc3b33b0c8a4132b6504360b221e0a34c7e99fb3ba0036` |
+
+Use the previously verified timing cross-build, template checkout, public SDK and RADV pins. The packaging command requires Python 3.11+ with Pillow, the compiler environment from the cross-build, and the upstream native tool and generated runtime in the PS5_Vulkan checkout. This invocation shows the inputs used on this host. Choose a fresh output directory for a rebuild.
+
+```bash
+template=/tmp/rekarina-phase0-pins.17B9otTR/PS5_VulkanTemplate
+vulkan=/tmp/rekarina-phase0.RyKKxgYw/vulkan
+title_sdk=/tmp/rekarina-phase0-pins.17B9otTR/title/.deps/native/ps5-payload-sdk
+sdk_source=/tmp/rekarina-phase0.RyKKxgYw/sdk
+radv=build/m0-archive/PS5_Vulkan/.deps/native/radv-release
+source /tmp/rekarina-phase0.RyKKxgYw/host-env.sh
+# Supply Pillow for the interpreter running the generator.
+python3 tools/build-m0-title.py build/m0-title-final "$template" "$vulkan" \
+  build/m0-archive/PS5_Mesa "$title_sdk" "$radv" \
+  build/m0-portable-timing/ps5-timing-first "$sdk_source"
+```
+
+The builder verifies the archived RADV digest, source pins and cross-build checksums. It uses the upstream title ID exclusions, metadata and icon generator, platform startup and shell-close hook, CRT, link script and release ZIP routines. The package contains the compute shader inside the executable. Its runtime asset set consists of the generated icon and libc companion. Shell notifications provide the interface. The lab-specific notice hook stages notices for this offscreen build. The manifest records the lab base commit, exact adapter source hash, binary inputs and build identity. [Template packaging contract](https://github.com/mihawk-99/PS5_VulkanTemplate/blob/91179df760df1e6c6f2d4d172bc435319d79ff3c/skills/ps5-homebrew/references/title-packaging.md).
+
+The upstream asset validator accepted the 512×512 icon. The native tool reported `integrity: valid` for both modules, and its reconstructed executable matched the digest reported by inspection. The signer omits a standalone trailing ELF note when selecting segments. The upstream release checker extracted the ZIP and matched all 21 files to the folder. Repeating the same command with output directory `build/m0-title-repeat` produced a byte-identical ZIP (`cmp build/m0-title-{final,repeat}/dist/PPSA99743.zip` returned 0). Inspection logs, the linked PIE and the converted ELF remain in `build/m0-title-final/work/`.
+
+Linux-only verification used llvmpipe for the shared correctness and timing tests. The title capture test exercised a missing capture directory, a successful run and a missing ICD on a second launch. Shell notifications were stubbed in that test. All three CTest cases and the adapter checks passed.
+
+```bash
+VK_DRIVER_FILES=/usr/share/vulkan/icd.d/lvp_icd.json MESA_SHADER_CACHE_DISABLE=true \
+  ctest --test-dir build/m0-portable-timing/linux --output-on-failure
+g++ -std=c++20 '-DM0_CAPTURE_ROOT="capture"' '-DM0_BUILD_ID="linux-test"' \
+  -I "$template/ps5/src" -I "$radv/include" -I tests/fixtures/m0-radv-compute \
+  tests/fixtures/m0-title/{main,host-platform}.cpp \
+  build/m0-portable-timing/linux/libm0_radv_compute_workload.a -l:libvulkan.so.1 \
+  -o build/m0-title-final/work/test-capture
+python3 tests/fixtures/m0-title/check-host.py build/m0-title-final/work/test-capture \
+  tools/verify-m0-radv-compute.py
+```
+
+Console launch, runtime import resolution, observed notification delivery, writable capture and shell termination on the Slim remain `NOT_RUN`. [Manual deployment and capture](HARDWARE_VALIDATION.md#m0-standalone-radv-compute-check).

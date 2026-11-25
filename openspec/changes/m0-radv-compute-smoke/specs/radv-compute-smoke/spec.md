@@ -83,3 +83,15 @@ The timing probe SHALL validate one dispatch before timing, perform five warm-up
 #### Scenario: PS5 timing build requested
 - **WHEN** the cross-build selects the timing probe
 - **THEN** it uses the shared timing workload and the PS5 RADV resolver, and records build-host evidence for the pre-packaging ELF and its runtime imports. Console execution remains `NOT_RUN` until a verified title runs on the target.
+
+### Requirement: Deployable compute title
+
+The build SHALL produce a transferable title directory and a ZIP rooted at its assigned title ID. The title SHALL start the shared compute smoke, show execution and result status, persist its capture and build identity, and finish through the shell.
+
+#### Scenario: Build-host acceptance
+- **WHEN** the pinned title tools inspect the executable and runtime, the metadata and icon match the title, and the unpacked ZIP matches the complete folder
+- **THEN** the build records package identity and structural validation while console execution stays NOT_RUN.
+
+#### Scenario: Capture unavailable
+- **WHEN** the title cannot open a fresh capture for a run
+- **THEN** it reports an error and returns through the title lifecycle before submitting GPU work.

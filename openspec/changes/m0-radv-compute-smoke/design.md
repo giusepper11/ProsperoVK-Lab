@@ -23,3 +23,5 @@ The pinned PS5 RADV archive and SDK are available as local build inputs. The doc
 ## Verification
 
 Use llvmpipe for a positive execution test and an unavailable ICD for a host failure-path test. Check the exact result and process status. Match the pre-packaging ELFs byte for byte across two independent links and verify the recorded source and artifact hashes. Preserve the Linux commands, shader identity and PS5-target linkage evidence in the ignored build tree. Track console execution separately under the hardware runbook.
+
+Use the pinned template metadata and icon generator, platform initialization and shell-close hook, PS5_Vulkan CRT, whole-archive link recipe, executable converter, runtime and SELF inspection. The bounded compute entry needs only its embedded shader. Use shell notifications for status and a fresh title-local run directory for each capture. Bind each journal to the package provenance with a build digest.

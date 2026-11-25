@@ -26,3 +26,5 @@ The documented PS5 CTS fork is unavailable. The public RADV smoke source provide
 ## Impact
 
 Adds an isolated C++20/CMake fixture, a PS5 build-host check and M0 evidence. The original CTS case and the M1 portable runner retain their existing acceptance criteria.
+
+M0 also requires a complete, host-validated title folder and deployment ZIP for manual transfer. Console execution is a separate operator gate.

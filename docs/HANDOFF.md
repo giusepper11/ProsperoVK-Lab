@@ -9,6 +9,7 @@ Work is on `feat/m0-vulkan-feasibility`. M0 remains open. The target is PS5 Slim
 | Linux software Vulkan | The shared offscreen compute fixture validates all 4,096 output words. The timing probe runs one correctness check, five warm-ups and 30 measured dispatches, with optional verbose logs. CTest covers report statistics, invalid arguments, missing ICD, stale readback and timeout. [Linux commands](M0_TOOLCHAIN.md#run-the-homebrew-timing-probe-on-linux) |
 | Khronos CTS | The original `dEQP-VK.compute.pipeline.basic.copy_ssbo_single_invocation` passed on llvmpipe at CTS revision `f6a29701220f34dd1407513bfe80d74ca7b392ce`. The focused PS5-target ELF was linked locally. [Case verification](M0_TOOLCHAIN.md#build-the-local-cts-headless-adapter) |
 | PS5-target build | The single-dispatch smoke and timing probe link against Mihawk's RADV archive. Two timing builds produced identical ELFs. Their reports measure CPU-observed submission and completion. GPU timing remains unavailable. [Build and import checks](M0_TOOLCHAIN.md#cross-build-the-homebrew-timing-probe-for-ps5) |
+| Manual deployment | `build/m0-title-final/dist/PPSA99743/` and `PPSA99743.zip` in the same directory. The package passed host structural validation. [Build record](M0_TOOLCHAIN.md#build-the-deployable-m0-title) |
 | Review artifact | The exporter creates deterministic smoke and timing ZIPs with the ELF, shader and build provenance. An upload and download through Prospero Manager matched the local timing ZIP byte for byte. [Archive commands](M0_TOOLCHAIN.md#export-the-timing-review-zip), [transfer evidence](HARDWARE_VALIDATION.md#m0-file-transfer-check) |
 
 ## Reproduce from this branch
@@ -27,6 +28,6 @@ The Linux build requires Vulkan headers and loader, `glslangValidator`, `spirv-v
 
 ## Resume at the hardware gate
 
-1. Identify an authorized title packaging and launch environment for the target. Record the installable title's manifest, executable and package digests, runtime library providers and review of source and notices.
-2. Run the single-dispatch `m0.radv.compute` first. Retrieve `result.json`, `start.log` and the observed `exit-code.txt` and verify them against the exact title build. [Hardware runbook](HARDWARE_VALIDATION.md#m0-standalone-radv-compute-check)
+1. Use the complete `PPSA99743` folder or extract its deployment ZIP. Check the digest and confirm the ID is free on the target.
+2. Manually launch the title and retrieve its fresh `run-NNNNNN` directory. Check the smoke result, timing capture, and observed shell exit. [Hardware runbook](HARDWARE_VALIDATION.md#m0-standalone-radv-compute-check)
 3. Keep the hardware and Linux evidence distinct. Resolve the M0 gates before starting the [M1 portable runner](../openspec/changes/m1-portable-vulkan-smoke/proposal.md).
