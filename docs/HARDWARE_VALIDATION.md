@@ -164,3 +164,5 @@ PPSA99745 is the primary M1 lab title. The intended target is the PS5 Slim used 
 | SHELL_EXIT | NOT_RUN |
 
 The Slim exit gate remains open. The M0 results above belong to their original titles and builds.
+
+The host-verified candidate is `build/m1-title/title/dist/PPSA99745/` with its sibling `PPSA99745.zip`. Two clean builds at lab revision `dbd2627bcccd5204d0c37089eac07f90f9a560d7` produced identical ZIPs. The package contains 26 files. Build ID `35a55589a3602c674c255971d94122e628236559b8f51958338422804b356681`, ZIP SHA-256 `085c544431614423377aa8d0e6e6698f1dd52c644f2b2b5cd9fac7085170b89a`, executable SHA-256 `f193138495c4284cd592229cdab3d65c8bd2ed6c6ff4e99cc6649b35cac09247`. The manifest identifies PS5_Mesa `1ba9874f478657ccf6da72ce55f0260164cc0bd0` and the M0-verified RADV release archive. Deployment authorization and the Manager endpoint are pending.

@@ -63,3 +63,26 @@ OPENSPEC_TELEMETRY=0 openspec validate --all --strict
 ```
 
 The M1 tests exercise both guards, incorrect payload, incompatible memory bits, insufficient limits, missing entry points, report errors, pending resources, and retry prevention after device loss or timeout. The non-coherent test injects memory flags on llvmpipe to exercise flush and invalidate. PS5 deployment, launch, retrieval and evidence checks use the [M1 harness commands](HARNESS.md#m1-portable-runner).
+
+### Verified host candidate
+
+Both targets were built at clean source revision `dbd2627bcccd5204d0c37089eac07f90f9a560d7`. The installed Release runner identified llvmpipe, Mesa 26.0.8 and LLVM 21.1.8. The workload checked 64 outputs and two guards, with zero mismatches. Shader SHA-256 was `e81e4e59f713502dcd8f7a0c37ca4a5acef4e0b6c5fe04508a49c0f176931492` on both targets. The CPU intervals accompany the passing dispatch. GPU timing carries the reason `timestamps_not_measured_by_case`.
+
+| Retained Linux file under `build/m1-evidence/linux/` | SHA-256 |
+| --- | --- |
+| `inventory.json` | `57ada6300b7f7e1600375a0099fee4326ef8da5daca2e5406b5a7ea40841c5c1` |
+| `report.json` | `7dcd17eb02efb2ff0bbba67d8d1e74cba9d050b3f9f49063ebe689325ccaec9f` |
+| `report.json.start.json` | `0fb33c16866e0a961f8e7a997165f499c96ae6dc04a5cb7a87a3af81345dba33` |
+
+All 19 M1 CTests and four M0 Linux CTests passed. The retained M0 result verifier, QPA verifier, title-capture and package checks passed. Strict OpenSpec validation passed all three active items. The M1 injected requirements tests observed zero submissions for an absent compute queue, an insufficient workgroup limit, incompatible buffer memory bits and an allocation over the 1 MiB ceiling. Fault injection supplies Linux regression evidence.
+
+The M1 PS5 adapter input test and synthetic Manager retrieval/acceptance test passed on the host. The latter checked incomplete capture preservation, inventory-only handling, report and journal identity, and cross-run substitution. The second clean package was byte-identical.
+
+```bash
+python3 -B tests/m1/ps5-adapter.py "$TEMPLATE" /tmp/prosperovk-m0.QucJcB/toolroot/usr/include
+tools/m0 package build/m1-title --m1
+tools/m0 verify build/m1-title/title/dist/PPSA99745
+python3 -B tests/m1/harness.py build/m1-title/title/dist/PPSA99745 build/m1-evidence/linux/report.json
+tools/m0 package build/m1-title-repeat --m1
+cmp build/m1-title/title/dist/PPSA99745.zip build/m1-title-repeat/title/dist/PPSA99745.zip
+```
